@@ -164,12 +164,25 @@ def report(start_time, datatables_css, jquery, datatables, no_redirect, output):
             {datatables}
             <script type="text/javascript" class="init">
               $(document).ready( function () {{
-                $('#all_hosts').DataTable( {{
-                  "pageLength": 100
+                var hosts_table = $('#all_hosts').DataTable( {{
+                  "pageLength": 10
                 }} );
-                $('#unique_titles').DataTable();
-                $('#unique_content').DataTable();
-                $("a").attr("target", "_blank");                 
+                $('#unique_titles').DataTable( {{
+                  "initComplete": function () {{
+                    var api = this.api();
+                    api.$('td').click( function () {{
+                      $(all_hosts).DataTable().search( this.innerHTML ).draw();
+                      }} );                      
+                    }}
+                }} );
+                $('#unique_content').DataTable( {{
+                  "initComplete": function () {{
+                    var api = this.api();
+                    api.$('td').click( function () {{
+                      $(all_hosts).DataTable().search( this.innerHTML ).draw();
+                      }});                      
+                    }}
+                }} );
               }} );
             </script>
           </head>
