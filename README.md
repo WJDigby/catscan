@@ -1,8 +1,8 @@
 # Catscan
 
-Catscan is a tool to triage web applications in large environments. Use it to quickly identify unique or uncommon applications that may be interesting, or identify targets of interest based on title. Catscan is not intended to replace tools like [eyewitness](https://github.com/FortyNorthSecurity/EyeWitness) or [gowitness](https://github.com/sensepost/gowitness), but it can save one from scrolling through hundreds of IIS7 server splash pages or identical printer pages with its searchable and sortable html report.
+Catscan is a tool to triage web applications in large environments. Use it to quickly identify unique or uncommon applications that may be interesting, or identify targets of interest based on title. Catscan is not intended to replace tools like [eyewitness](https://github.com/FortyNorthSecurity/EyeWitness) or [gowitness](https://github.com/sensepost/gowitness), but it can save one from scrolling through hundreds of IIS7 server splash pages or printer admin pages. 
 
-Catscan's utility comes from its use of [DataTables](https://datatables.net/), which is a [jQuery](https://jquery.com/) plug-in. DataTables makes HTML tables highly functional, able to be sorted by any column or searched.
+Catscan's utility comes from its use of [DataTables](https://datatables.net/), which is a [jQuery](https://jquery.com/) plug-in. DataTables makes HTML tables highly functional, able to be searched for any text or sorted by any column.
 
 Catscan takes as input either a list of IP addresses / URLS or an Nmap .xml file. The output is an HTML page with three tables:
 * All hosts by IP/URL
@@ -42,3 +42,10 @@ In addition, Catscan has several optional arguments:
 * -u / --user-agent - Set a user agent. The default is "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.85 Safari/537.36"
 * -r / --no-redirect - Do **not** follow redirects. By default, Catscan follows redirects and indicates in the resulting output whether a redirect was followed.
 * -k / --validate - Validate certificates. Generally not recommended, especially for internal environments with lots of self-signed certificates. 
+
+Use of the HTML report should be intuitive. As noted, the report presents three tables:
+* All hosts by IP/URL
+* Unique hosts by title
+* Unique hosts by content (unique content is determined by MD5 hashing the page response)
+
+Note that clicking any table element in the second or third table populates the search bar of the first table. So, if you want a quick link to a site with unique content, click its title or hash in the bottom table to search for that host in the first table. 
