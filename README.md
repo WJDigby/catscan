@@ -16,7 +16,7 @@ Clone the repositoriy and install the requirements:
     git clone https://github.com/WJDigby/catscan.git
     pip3 install -r requirements.txt
     
-Presently the only non-standard library required (the only one included in requirements.txt) is lxml.
+Presently the only non-standard libraries required (the only ones included in requirements.txt) are requests and lxml.
 
 ## Use
 
