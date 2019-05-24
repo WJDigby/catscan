@@ -2,6 +2,8 @@
 ####### catscan requirements.txt #######
 #
 ###### Requirements without Version Specifiers ######
-requests
+jinja2
 lxml
+requests
+xmltodict
 #
