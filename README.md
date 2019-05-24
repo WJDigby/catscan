@@ -24,6 +24,19 @@ Additional features include:
 Catscan's utility comes from the HTML report, which uses [DataTables](https://datatables.net/), a [jQuery](https://jquery.com/) plug-in, and [CellEdit](https://github.com/ejbeaty/CellEdit).
 
 ![All hosts](https://raw.githubusercontent.com/WJDigby/catscan/master/screens/catscan1.png)
+* List all scanned hosts by URI
+* Links to hosts open in new window
+* Search hosts by any field
+* Export displayed table to CSV
+* Take notes if -n / --notes option is used (notes included in CSV)
+
+![Hosts by title](https://raw.githubusercontent.com/WJDigby/catscan/master/screens/catscan2.png)
+* Sort hosts by title or count
+* Quickly search all hosts table by clicking any element in this table
+
+![All hosts](https://raw.githubusercontent.com/WJDigby/catscan/master/screens/catscan3.png)
+* Identify unique (or common) responses by hash
+* Quickly search all hosts table by clicking any element in this table
 
 # Installation
 
