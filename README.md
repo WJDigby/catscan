@@ -68,10 +68,11 @@ curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/dataTables.cell
 4c995255f0e426b527729ce31d360343  -
 
 
+curl https://cdn.datatables.net/1.10.18/css/jquery.dataTables.min.css --silent | md5sum
+01660835fe229de543497371787d0c8e  -
 
-#dataTables CSS
-curl https://cdn.datatables.net/v/dt/dt-1.10.18/datatables.min.css --silent | md5sum 
-6ae5fd80e0b4ead65b8f2a0e585bc585  -
+curl https://raw.githubusercontent.com/WJDigby/catscan/master/css/jquery.dataTables.min.css --silent | md5sum
+01660835fe229de543497371787d0c8e  -
 ```
 
 # Use
