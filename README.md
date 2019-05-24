@@ -48,13 +48,26 @@ Make sure I didn't put anything shady in the javascript files:
 curl https://code.jquery.com/jquery-3.3.1.min.js --silent | md5sum 
 a09e13ee94d51c524b7e2a728c7d4039  -
 
+curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/jquery-3.3.1.min.js --silent | md5sum
+a09e13ee94d51c524b7e2a728c7d4039  -
+
+
 #dataTables
 curl https://cdn.datatables.net/1.10.18/js/jquery.dataTables.min.js --silent | md5sum 
 4d2910ca45f9cea3f35e87065a1be139  -
 
+curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/jquery.dataTables.min.js --silent | md5sum
+4d2910ca45f9cea3f35e87065a1be139  -
+
+
 #cellEdit
 curl https://raw.githubusercontent.com/ejbeaty/CellEdit/master/js/dataTables.cellEdit.js --silent | md5sum
 4c995255f0e426b527729ce31d360343  -
+
+curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/dataTables.cellEdit.js --silent | md5sum
+4c995255f0e426b527729ce31d360343  -
+
+
 
 #dataTables CSS
 curl https://cdn.datatables.net/v/dt/dt-1.10.18/datatables.min.css --silent | md5sum 
