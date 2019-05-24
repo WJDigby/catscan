@@ -1,80 +1,260 @@
+"""Take list of hosts/URIs or Nmap XML as input, scan hosts on given ports,
+and return a searchable and sortable HTML report."""
+
 import argparse
 from argparse import RawDescriptionHelpFormatter
-import requests
-import hashlib
-from lxml import html, etree
-import urllib3
-from multiprocessing.dummy import Pool as ThreadPool
-from functools import partial
 from datetime import datetime
+import hashlib
+from functools import partial
+from multiprocessing.dummy import Pool as ThreadPool
+import re
+
+import jinja2
+from lxml import html, etree
+import requests
+import urllib3
+import xmltodict
+
 
 results = {}
-datatables_css = '<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.19/css/jquery.dataTables.min.css">'
-jquery = '<script src="https://code.jquery.com/jquery-3.3.1.slim.js" integrity="sha256-fNXJFIlca05BIO2Y5zh1xrShK3ME+/lYZ0j+ChxX2DA=" crossorigin="anonymous"></script>'
-datatables = '<script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js"></script>'
+datatables_css = '<link rel="stylesheet" type="text/css" href="./css/jquery.dataTables.min.css">'
+jquery = '<script type="text/javascript" charset="utf8" src="./js/jquery-3.3.1.min.js"></script>'
+datatables = '<script type="text/javascript" charset="utf8" src="./js/jquery.dataTables.min.js"></script>'
+datatables_celledit = '<script type="text/javascript" charset="utf8" src="./js/dataTables.cellEdit.js"></script>'
+
+jinja_env = jinja2.Environment(trim_blocks=True)
+TEMPLATE_HTML_REPORT = jinja_env.from_string("""\
+<html>
+  <head>
+    <title>Catscan Report for {{ start_time }}</title>
+    {{ datatables_css }}
+    {% raw %}
+    <style type="text/css" class="init">
+        body {font-family:Arial;}
+    </style>
+    {% endraw %}
+    {{ jquery }}
+    {{ datatables }}
+    {% if notes_column %}
+    {{ datatables_celledit }}
+    {% endif %}
+    {% raw %}
+    <script type="text/javascript" class="init">
+      $(document).ready( function () {
+        var hosts_table = $('#all_hosts').DataTable( {
+          "pageLength": 10
+        });
+    {% endraw %}
+        {% if notes_column %}
+        {% raw %}
+        function myCallbackFunction (updatedCell, updatedRow, oldValue) {
+        }
+        hosts_table.MakeCellsEditable({
+          "onUpdate": myCallbackFunction,
+          "columns": [5]
+        });
+        {% endraw %}
+        {% endif %}
+        {% raw %}
+        var titles_table = $('#unique_titles').DataTable( {
+          "initComplete": function () {
+            var api = this.api();
+            api.$('td').click( function () {
+              $(all_hosts).DataTable().search( this.innerHTML ).draw();
+              });                      
+            }
+        });
+        {% endraw %}
+        {% if notes_column %}
+        {% raw %}
+        titles_table.MakeCellsEditable({
+          "onUpdate": myCallbackFunction,
+          "columns": [2]
+        });
+        {% endraw %}
+        {% endif %}
+        {% raw %}
+        var content_table = $('#unique_content').DataTable( {
+          "initComplete": function () {
+            var api = this.api();
+            api.$('td').click( function () {
+              $(all_hosts).DataTable().search( this.innerHTML ).draw();
+              });                      
+            }
+        });
+        {% endraw %}
+        {% if notes_column %}
+        {% raw %}
+        content_table.MakeCellsEditable({
+          "onUpdate": myCallbackFunction,
+          "columns": [3]
+        });
+        {% endraw %}
+        {% endif %}
+      {% raw %}
+      });
+      </script>
+      <script>
+      //Adapted from https://www.codexworld.com/export-html-table-data-to-csv-using-javascript/
+      function downloadCSV(csv, filename) {
+      var csvFile;
+      var downloadLink;
+      csvFile = new Blob([csv], {type: "text/csv"});
+      downloadLink = document.createElement("a");
+      downloadLink.download = filename;
+      downloadLink.href = window.URL.createObjectURL(csvFile);
+      downloadLink.style.display = "none";
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      }
+      function exportToCSV(table, filename) {
+        var csv = [];
+        var rows = document.getElementById(table).rows;
+        for (var i = 0; i < rows.length; i++) {
+          var row = [], cols = rows[i].cells;
+          for (var j = 0; j < cols.length; j++) 
+            row.push(cols[j].innerText);
+            csv.push(row.join(","));        
+        }
+     downloadCSV(csv.join("\\n"), filename);
+     }
+     function clearSearch(target) {
+       $(target).DataTable().search( "" ).draw();
+     }
+     </script>
+    {% endraw %}  
+  </head>
+  <body>
+    <h1 align="center">All Hosts</h1>
+    <button onclick="clearSearch(all_hosts)" style="float: right;">Clear Search</button><br><br>
+    <table id="all_hosts" class="display">
+      <thead>
+        <tr>
+          <th>URI</th>
+          <th>Page title</th>
+          <th>Response Code</th>
+          <th>MD5 Hash</th>
+          {% if redirect_column %}
+          <th>Redirect</th>
+          {% endif %}
+          {% if notes_column %}
+          <th>Notes</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for key, value in results.items() %}
+        <tr><td><a href={{ key }} target="_blank"</a>{{ key }}</td><td>{{ value[0] }}</td><td>{{ value[1] }}</td><td>{{ value[2] }}</td>{% if redirect_column %}<td>{{ value[3] }}</td>{% endif %}{% if notes_column %}<td>{{ "" }}</td>{% endif %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button onclick="exportToCSV('all_hosts', 'all_hosts.csv')">Save as CSV File</button>
+    <br><br>
+    <h1 align="center">Hosts by Title</h1>
+    <button onclick="clearSearch(unique_titles)" style="float: right;">Clear Search</button><br><br>
+    <table id="unique_titles" class="display">
+      <thead>
+        <tr>
+          <th>Page Title</th>
+          <th>Count</th>
+          {% if notes_column %}
+          <th>Notes</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for key, value in title_counts.items() %}
+        <tr><td>{{ key }}</td><td>{{ value }}</td>{% if notes_column %}<td>{{ "" }}</td>{% endif %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button onclick="exportToCSV('unique_titles', 'unique_titles.csv')">Save as CSV File</button>
+    <br><br>
+    <h1 align="center">Hosts by Content</h1>
+    <button onclick="clearSearch(unique_content)" style="float: right;">Clear Search</button><br><br>
+    <table id="unique_content" class="display">
+      <thead>
+        <tr>
+        <th>MD5 Hash</th>
+        <th>Title</th>
+        <th>Count</th>
+        {% if notes_column %}
+        <th>Notes</th>
+        {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for key, value in content_counts.items() %}
+        <tr><td>{{ key }}</td><td>{{ value[1] }}</td><td>{{ value[0] }}</td>{% if notes_column %}<td>{{ "" }}</td>{% endif %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button onclick="exportToCSV('unique_content', 'unique_content.csv')">Save as CSV File</button>
+    <br><br>
+  </body>
+</html>
+""")
 
 
-def parse_nmap_xml(nmap_file):
-    """Parse an Nmap .xml file for open HTTP(S) ports and return a list"""
-    ips_to_scan = []
-    http = (80, 443, 8000, 8008, 8080, 8443)
-    with open(nmap_file) as f:
-        xml = f.read()
-        xml = bytes(bytearray(xml, encoding='utf-8'))
-    root = etree.fromstring(xml)
-    for host in root:
-        for host_attribute in host:
-            tag = host_attribute.tag
-            if tag == 'address':
-                ipv4_addr = host_attribute.attrib['addr']
-            for host_port in host_attribute:
-                tag = host_port.tag
-                if tag == 'port' and int(host_port.attrib['portid']) in http:
-                    port = host_port.attrib['portid']
-                    for port_attribute in host_port:
-                        tag = port_attribute.tag
-                        if tag == 'state' and port_attribute.attrib['state'] == 'open':
-                            if port == '443':
-                                ips_to_scan.append('https://{}:{}'.format(ipv4_addr, port))
-                            else:
-                                ips_to_scan.append('http://{}:{}'.format(ipv4_addr, port))
-    host_count = len(ips_to_scan)
-    return ips_to_scan, host_count
+def parse_nmap_xml(nmap_file, ports):
+    """Parse an Nmap .xml file for open HTTP(S) ports. Return a list."""
+    hosts = []
+    nmap_scan = xmltodict.parse(nmap_file.read())
+    for host in nmap_scan['nmaprun']['host']:
+        ipv4_addr = host['address']['@addr']
+        if isinstance(host['ports']['port'], list):
+            for port in host['ports']['port']:
+                if int(port['@portid']) in ports:
+                    hosts.append(f"{ipv4_addr}:{port['@portid']}")
+        else:
+            if int(host['ports']['port']['@portid']) in ports:
+                hosts.append(f"{ipv4_addr}:{host['ports']['port']['@portid']}")
+    scan_set = {'https://' + host if host[-3:] == '443' else 'http://' + host for host in hosts}
+    return scan_set, len(scan_set)
 
 
-def build_list(ip_list, ports):
-    """Read a text file of IPs or URLs, append ports, and return a list for scanning"""
-    ips_to_scan = []
-    with open(ip_list) as f:
-        ips = f.readlines()
-        for ip in ips:
-            if '://' in ip:
-                ip = ip.split('://', 1)[1]
-            if ip not in ips_to_scan:
+def build_list(list_file, ports):
+    """Read a text file of IPs or URLs, prepend protocol and append port as necessary.
+    Return a set for scanning"""
+    regex = re.compile(r"^(https?:\/\/)?.+?(:[0-9]{0,5})?$")
+    scan_set = set()
+    lines = list_file.readlines()
+    for line in lines:
+        line = re.match(regex, line)
+        if line[1] and line[2]: #protocol and port
+            scan_set.add(line[0])
+        if line[1] and not line[2]: #protocol no port
+            if line[1] == 'https://':
+                scan_set.add(line[0])
+            else:
                 for port in ports:
-                    if str(port) == '443':
-                        if not ip.startswith('https://'):
-                            ips_to_scan.append('https://{}'.format(ip.rstrip()))
-                        else:
-                            ips_to_scan.append(ip.rstrip())
-                    else:
-                        if not ip.startswith('http://'):
-                            ips_to_scan.append('http://{}:{}'.format(ip.rstrip(), str(port)))
-                        else:
-                            ips_to_scan.append('{}:{}'.formati(ip.rstrip(), str(port)))
-    host_count = len(ips_to_scan)
-    return ips_to_scan, host_count
+                    if str(port) != '443': #If the list includes a URL with just HTTP, it will not automatically get an HTTPS variant added.
+                        uri = line[0] + ':' + str(port)
+                        scan_set.add(uri)
+        if not line[1] and line[2]: #no protocol but port
+            if line[2] == ':443':
+                uri = 'https://' + line[0]
+            else:
+                uri = 'http://' + line[0]
+            scan_set.add(uri)
+        if not line[1] and not line[2]: #neither protocol nor port
+            for port in ports:
+                if str(port) == '443':
+                    uri = 'https://' + line[0] + ':' + str(port)
+                else:
+                    uri = 'http://' + line[0] + ':' + str(port)
+                scan_set.add(uri)
+    return scan_set, len(scan_set)
 
 
-def scan(timeout, validate_certs, no_redirect, user_agent, ip):
-    """Make requests to the provided IPs and save attributes of the responses."""
+def scan(timeout, validate_certs, no_redirect, user_agent, verbose, uri):
+    """Make requests to the provided URIs and save attributes of the responses."""
     headers = {'User-Agent': user_agent}
-    parser = etree.HTMLParser()  # Build parser to ensure multiple threads aren't using a global parser
+    parser = etree.HTMLParser()  # Build parser so multiple threads don't use a global parser
     try:
-        resp = requests.get(ip, headers=headers, timeout=timeout, verify=validate_certs,
+        resp = requests.get(uri, headers=headers, timeout=timeout, verify=validate_certs,
                             allow_redirects=no_redirect)  # if response empty, don't add
         content = resp.content
-
         if resp.content:
             resp_hash = hashlib.md5(resp.content).hexdigest()
             tree = html.fromstring(content, parser=parser)
@@ -82,47 +262,114 @@ def scan(timeout, validate_certs, no_redirect, user_agent, ip):
                 title = tree.find('.//title').text
             except AttributeError:
                 title = '<none>'
-                print('[-] {} - attribute error; page may lack title element'.format(ip))
+                if verbose:
+                    print(f'[-] {uri} - attribute error; page may lack title element')
             if no_redirect is False:
-                results[ip] = [title, resp.status_code, resp_hash]
+                results[uri] = [title, resp.status_code, resp_hash]
             elif no_redirect is True:
-                if resp.url.strip('/') != ip:
-                    results[ip] = [title, resp.status_code, resp_hash, '<a href="{}"</a>{}'.format(resp.url, resp.url)]
-                elif resp.url.strip('/') == ip:
-                    results[ip] = [title, resp.status_code, resp_hash, 'No redirect.']
+                if resp.url.strip('/') != uri:
+                    results[uri] = [title, resp.status_code, resp_hash, f'<a href="{resp.url}"</a>{resp.url}']
+                elif resp.url.strip('/') == uri:
+                    results[uri] = [title, resp.status_code, resp_hash, 'No redirect.']
         else:
-            results[ip] = ['<none>', resp.status_code, '<no page content>', '<no page content>']
-
+            results[uri] = ['<none>', resp.status_code, '<no page content>', '<no page content>']
     except requests.exceptions.ConnectTimeout:
-        print('[-] {} - connection timeout'.format(ip))
-        results[ip] = ['Connection timeout.'] * 4
+        if verbose:
+            print(f'[-] {uri} - connection timeout')
+        results[uri] = ['Connection timeout.'] * 4
     except requests.exceptions.ReadTimeout:
-        print('[-] {} - read timeout'.format(ip))
-        results[ip] = ['Read timeout.'] * 4
+        if verbose:
+            print(f'[-] {uri} - read timeout')
+        results[uri] = ['Read timeout.'] * 4
     except requests.exceptions.SSLError:
-        print('[-] {} - certificate verification failed'.format(ip))
-        results[ip] = ['Certificate error.'] * 4
+        if verbose:
+            print(f'[-] {uri} - certificate verification failed')
+        results[uri] = ['Certificate error.'] * 4
     # Since requests uses other libraries (socket, httplib, urllib3) a requests ConnectionError can actually be any number of errors raised by those libraries.
     except requests.exceptions.ConnectionError as e:
         if 'BadStatusLine' in str(e.args[0]):
-            print('[-] {} - malformed page (consider visiting manually)'.format(ip))
-            results[ip] = ['Malformed page.'] * 4
+            if verbose:
+                print(f'[-] {uri} - malformed page (consider visiting manually)')
+            results[uri] = ['Malformed page.'] * 4
         elif 'Connection refused' in str(e.args[0]):
-            print('[-] {} - connection refused'.format(ip))
-            results[ip] = ['Connection refused.'] * 4
+            if verbose:
+                print(f'[-] {uri} - connection refused')
+            results[uri] = ['Connection refused.'] * 4
         elif 'Connection reset by peer' in str(e.args[0]):
-            print('[-] {} - connection reset by peer'.format(ip))
-            results[ip] = ['Connection reset by peer.'] * 4
+            if verbose:
+                print(f'[-] {uri} - connection reset by peer')
+            results[uri] = ['Connection reset by peer.'] * 4
         else:  # Catch all the others
-            print('[-] {} - unhandled exception: {}'.format(ip, str(e)))
-            results[ip] = ['Unhandled exception.'] * 4
+            if verbose:
+                print(f'[-] {uri} - unhandled exception: {str(e)}')
+            results[uri] = ['Unhandled exception.'] * 4
 
 
-def report(start_time, datatables_css, jquery, datatables, no_redirect, output):
-    """Generate the HTML report using JQuery and Datatables."""
+def main():
+    """Scan a list of hosts and generate an HTML report. Return nothing."""
+    user_agent = '''Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.85 Safari/537.36'''
+
+    parser = argparse.ArgumentParser(description='Scan and categorize web servers using a searchable / sortable HTML report.',
+                                     epilog='list input: python3 catscan.py -l <ips.txt> -p 80 443 8080 -t 10\n'
+                                            'Nmap xml:   python3 catscan.py -x <nmap.xml>',
+                                     formatter_class=RawDescriptionHelpFormatter)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-x', '--xml', dest='nmap_xml', type=argparse.FileType('r'),
+                       help='Use an Nmap XML file as input.')
+    group.add_argument('-l', '--list', dest='host_list', type=argparse.FileType('r'),
+                       help='Text file containing list of IPs or hostnames separated by line.')
+    parser.add_argument('-p', '--ports', dest='ports', nargs='+', required=False, default=[80, 443],
+                        help='List of ports to scan. Default 80 and 443.')
+    parser.add_argument('-t', '--threads', dest='threads', type=int, default=10,
+                        help='Number of threads. Default 10.')
+    parser.add_argument('-T', '--timeout', dest='timeout', type=int, default=5,
+                        help='Timeout in seconds. Default 5.')
+    parser.add_argument('-o', '--output', dest='output', required=False,
+                        help='Name of HTML report. Default based on date/time.')
+    parser.add_argument('-u', '--user-agent', dest='user_agent', required=False, default=user_agent,
+                        help='User-Agent string.')
+    parser.add_argument('-r', '--no-redirect', dest='no_redirect', required=False, default=True, action='store_false',
+                        help='Do not follow redirects. Catscan follows redirects by default.')
+    parser.add_argument('-k', '--validate', dest='validate_certs', required=False, default=False,
+                        action='store_true', help='Validate certificates. Default false.')
+    parser.add_argument('-n', '--notes', dest='notes', required=False, default=False,
+                        action='store_true')
+    parser.add_argument('-v', '--verbose', dest='verbose', required=False, default=False,
+                        action='store_true')
+    args = parser.parse_args()
+
+    nmap_file = args.nmap_xml
+    list_file = args.host_list
+    ports = args.ports
+    timeout = args.timeout
+    threads = args.threads
+    output = args.output
+    user_agent = args.user_agent
+    no_redirect = args.no_redirect
+    validate_certs = args.validate_certs
+    notes = args.notes
+    verbose = args.verbose
+    start_time = datetime.now()
+    if not output:
+        output = f'catscan_report_{start_time.strftime("%a_%d%b%Y_%H%M").lower()}.html'
+    if nmap_file:
+        scan_list, host_count = parse_nmap_xml(nmap_file, ports)
+    elif list_file:
+        scan_list, host_count = build_list(list_file, ports)
+    func = partial(scan, timeout, validate_certs, no_redirect, user_agent, verbose)
+    pool = ThreadPool(threads)
+    pool.map(func, scan_list)
+    pool.close()
+    pool.join()
+    end_scan_time = datetime.now()
+    if verbose:
+        print(f'[*] Scan time: {(end_scan_time - start_time).total_seconds()} seconds')
+    print(f'[*] {str(host_count)} hosts scanned')
+    end_run_time = datetime.now()
+    print(f'[*] Total run time: {(end_run_time - start_time).total_seconds()} seconds')
+
     title_counts, content_counts = {}, {}
-    all_hosts_table, unique_titles_table, unique_content_table = [], [], []
-    for key, value in results.items():
+    for value in results.values():
         if value[0] in title_counts:
             title_counts[value[0]] += 1
         else:
@@ -131,168 +378,25 @@ def report(start_time, datatables_css, jquery, datatables, no_redirect, output):
             content_counts[value[2]][0] += 1
         else:
             content_counts[value[2]] = [1, value[0]]
-        if no_redirect is False:
-            # Passing all values as str() is a kluge to account for NoneTypes that should be handled better elsewhere
-            redirect_column = ''
-            all_hosts_table.append('<tr><td><a href="{}" target="_blank"</a>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>'.
-                                   format(key, key, str(value[0]), str(value[1]), str(value[2])))
-            html_all_hosts_table = '\n'.join(all_hosts_table)
-        elif no_redirect is True:
-            redirect_column = "<th>Redirect</th>"
-            all_hosts_table.append('<tr><td><a href="{}" target="_blank"</a>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>'.
-                                   format(key, key, str(value[0]), str(value[1]), str(value[2]), str(value[3])))
-            html_all_hosts_table = '\n'.join(all_hosts_table)
 
-    for key, value in title_counts.items():
-        unique_titles_table.append('<tr><td>{}</td><td>{}</td></tr>'.format(key, str(value)))
-        html_unique_titles_table = '\n'.join(unique_titles_table)
+    with open(output, 'w') as html_report:
+        html_report.write(TEMPLATE_HTML_REPORT.render(
+            start_time=start_time.strftime("%a_%d%b%Y_%H%M").lower(),
+            datatables_css=datatables_css,
+            jquery=jquery,
+            datatables=datatables,
+            datatables_celledit=datatables_celledit,
+            redirect_column=no_redirect,
+            notes_column=notes,
+            results=results,
+            title_counts=title_counts,
+            content_counts=content_counts
+        ))
 
-    for key, value in content_counts.items():
-        unique_content_table.append('<tr><td>{}</td><td>{}</td><td>{}</td></tr>'.format(str(key), str(value[1]), str(value[0])))
-        html_unique_content_table = '\n'.join(unique_content_table)
-
-    html = """
-        <html>
-          <head>
-            <title>Catscan Report for {start_time}</title>
-            {datatables_css}
-            <style type="text/css" class="init">
-                body {{font-family:Arial;
-                }}
-            </style>
-            {jquery}
-            {datatables}
-            <script type="text/javascript" class="init">
-              $(document).ready( function () {{
-                var hosts_table = $('#all_hosts').DataTable( {{
-                  "pageLength": 10
-                }} );
-                $('#unique_titles').DataTable( {{
-                  "initComplete": function () {{
-                    var api = this.api();
-                    api.$('td').click( function () {{
-                      $(all_hosts).DataTable().search( this.innerHTML ).draw();
-                      }} );                      
-                    }}
-                }} );
-                $('#unique_content').DataTable( {{
-                  "initComplete": function () {{
-                    var api = this.api();
-                    api.$('td').click( function () {{
-                      $(all_hosts).DataTable().search( this.innerHTML ).draw();
-                      }});                      
-                    }}
-                }} );
-              }} );
-            </script>
-          </head>
-          <body>
-            <h1 align="center">All Hosts</h1>
-            <table id="all_hosts" class="display">
-              <thead>
-                <tr>
-                  <th>URI</th>
-                  <th>Page title</th>
-                  <th>Response Code</th>
-                  <th>MD5 Hash</th>
-                  {redirect_column}
-                </tr>
-              <tbody>
-              {all_hosts_table}
-              </tbody>
-            </table>
-            <br><br>
-            <h1 align="center">Unique Hosts by Title</h1>
-            <table id="unique_titles" class="display">
-              <thead>
-                <tr>
-                  <th>Page Title</th>
-                  <th>Count</th>
-                </tr>
-              <tbody>
-              {titles_table}
-               </tbody>
-            </table>
-            <br><br>
-            <h1 align="center">Unique Hosts by Content</h1>
-            <table id="unique_content" class="display">
-              <thead>
-                <tr>
-                  <th>MD5 Hash</th>
-                  <th>Title</th>
-                  <th>Count</th>
-                </tr>
-              <tbody>
-              {content_table}
-              </tbody>
-            </table>
-          </body>
-        </html>
-        """.format(start_time=start_time.strftime('%A %d %B %Y %H:%M'), datatables_css=datatables_css, jquery=jquery,
-                   datatables=datatables, redirect_column=redirect_column, all_hosts_table=html_all_hosts_table,
-                   titles_table=html_unique_titles_table, content_table=html_unique_content_table)
-
-    if type(output) is datetime:
-        output = 'catscan_report_{}.html'.format(output.strftime('%a_%d%b%Y_%H%M').lower())
-
-    html_report = open(output, 'w')
-    html_report.write(html)
-    html_report.close()
-    print('[+] Report written to {}'.format(output))
-
-
-def main():
-    user_agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.85 Safari/537.36'
-
-    parser = argparse.ArgumentParser(description='Scan and categorize web servers using a searchable / sortable HTML report.',
-                                     epilog='list input: python3 catscan.py -l <ips.txt> -p 80 443 -t 5\n'
-                                            'Nmap xml:   python3 catscan.py -x <nmap.xml> -t 5',
-                                     formatter_class=RawDescriptionHelpFormatter)
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument('-x', '--xml', dest='nmap_xml', required=False, help='Use an Nmap XML file as input.')
-    group.add_argument('-l', '--list', dest='ip_list', required=False, help='Text file containing list of IPs, separated by line.')
-    parser.add_argument('-p', '--ports', dest='ports', nargs='+', required=False, default=[80, 443],
-                        help='List of ports to scan. Default 80 and 443. Use with --list option.')
-    parser.add_argument('-t', '--threads', dest='threads', type=int, required=True, help='Number of threads.')
-    parser.add_argument('-T', '--timeout', dest='timeout', type=int, default=5, help='Timeout in seconds. Default 5.')
-    parser.add_argument('-o', '--output', dest='output', required=False, help='Name of HTML report. Default based on date/time.')
-    parser.add_argument('-u', '--user-agent', dest='user_agent', required=False, default=user_agent, help='User-Agent string.')
-    parser.add_argument('-r', '--no-redirect', dest='no_redirect', required=False, default=True, action='store_false',
-                        help='Do not follow redirects. Catscan follows redirects by default.')
-    parser.add_argument('-k', '--validate', dest='validate_certs', required=False, default=False, action='store_true',
-                        help='Validate certificates. Default false.')
-    args = parser.parse_args()
-
-    nmap_xml = args.nmap_xml
-    ip_list = args.ip_list
-    ports = args.ports
-    timeout = args.timeout
-    threads = args.threads
-    output = args.output
-    user_agent = args.user_agent
-    no_redirect = args.no_redirect
-    validate_certs = args.validate_certs
-    start_time = datetime.now()
-    if not output:
-        output = start_time
-    if nmap_xml:
-        ips_to_scan, host_count = parse_nmap_xml(nmap_xml)
-    elif ip_list:
-        ips_to_scan, host_count = build_list(ip_list, ports)
-    func = partial(scan, timeout, validate_certs, no_redirect, user_agent)
-    pool = ThreadPool(threads)
-    pool.map(func, ips_to_scan)
-    pool.close()
-    pool.join()
-    end_scan_time = datetime.now()
-    print('[*] Scan time: %g seconds' % (end_scan_time - start_time).total_seconds())
-    print('[*] {} hosts scanned'.format(str(host_count)))
-    report(start_time, datatables_css, jquery, datatables, no_redirect, output)
-    end_run_time = datetime.now()
-    print('[*] Total run time: %g seconds' % (end_run_time - start_time).total_seconds())
-
+    print(f'[*] Report written to {output}')
 
 if __name__ == '__main__':
-    # Disable "InsecureRequestWarning: Unverified HTTPS request is being made. Adding certificate verification is strongly advised."
+    # Disable "InsecureRequestWarning: Unverified HTTPS request is being made.
+    # Adding certificate verification is strongly advised." warning.
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     main()
