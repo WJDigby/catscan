@@ -23,6 +23,8 @@ Additional features include:
 
 Catscan's utility comes from the HTML report, which uses [DataTables](https://datatables.net/), a [jQuery](https://jquery.com/) plug-in, and [CellEdit](https://github.com/ejbeaty/CellEdit).
 
+![All hosts](https://raw.githubusercontent.com/WJDigby/catscan/master/screens/catscan1.png)
+
 # Installation
 
 Consider installing and running in a virtual environment:
