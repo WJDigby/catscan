@@ -12,6 +12,12 @@ import re
 import jinja2
 from lxml import html, etree
 import requests
+try:
+    import ssdeep
+except ImportError:
+    ssdeep_module = False
+else:
+    ssdeep_module = True
 import urllib3
 import xmltodict
 
@@ -21,177 +27,265 @@ datatables_css = '<link rel="stylesheet" type="text/css" href="./css/jquery.data
 jquery = '<script type="text/javascript" charset="utf8" src="./js/jquery-3.3.1.min.js"></script>'
 datatables = '<script type="text/javascript" charset="utf8" src="./js/jquery.dataTables.min.js"></script>'
 datatables_celledit = '<script type="text/javascript" charset="utf8" src="./js/dataTables.cellEdit.js"></script>'
+ssdeep_js = '<script type="text/javascript" charset="utf8" src="./js/ssdeep.js"></script>'
 
-jinja_env = jinja2.Environment(trim_blocks=True)
+jinja_env = jinja2.Environment(trim_blocks=True, lstrip_blocks=True)
 TEMPLATE_HTML_REPORT = jinja_env.from_string("""\
 <html>
-  <head>
-    <title>Catscan Report for {{ start_time }}</title>
-    {{ datatables_css }}
-    {% raw %}
-    <style type="text/css" class="init">
-        body {font-family:Arial;}
-    </style>
-    {% endraw %}
-    {{ jquery }}
-    {{ datatables }}
-    {% if notes_column %}
-    {{ datatables_celledit }}
-    {% endif %}
-    {% raw %}
-    <script type="text/javascript" class="init">
-      $(document).ready( function () {
-        var hosts_table = $('#all_hosts').DataTable( {
-          "pageLength": 10
-        });
-    {% endraw %}
-        {% if notes_column %}
-        {% raw %}
-        function myCallbackFunction (updatedCell, updatedRow, oldValue) {
+   <head>
+      <title>Catscan Report for {{ start_time }}</title>
+      {{ datatables_css }}
+{% raw %}
+      <style type="text/css" class="init">
+         body {font-family:Arial;}
+      </style>
+{% endraw %}
+      {{ jquery }}
+      {{ datatables }}
+{% if notes_column %}
+      {{ datatables_celledit }}
+{% endif %}
+{% if fuzzy %}
+      {{ ssdeep_js }}
+{% endif %}
+{% raw %}
+   <script type="text/javascript" class="init">
+$(document).ready(function() {
+    var hostsTable = $('#all_hosts').DataTable({
+        "pageLength": 10
+    });
+{% endraw %}
+{% if notes_column %}
+{% raw %}
+    function myCallbackFunction(updatedCell, updatedRow, oldValue) {}
+    hostsTable.MakeCellsEditable({
+        "onUpdate": myCallbackFunction,
+        "columns": [5]
+    });
+{% endraw %}
+{% endif %}
+{% raw %}
+    var titlesTable = $('#unique_titles').DataTable({
+        "initComplete": function() {
+            var api = this.api();
+            api.$('td').click(function() {
+                $(all_hosts).DataTable().search(this.innerHTML).draw();
+            });
         }
-        hosts_table.MakeCellsEditable({
-          "onUpdate": myCallbackFunction,
-          "columns": [5]
-        });
-        {% endraw %}
-        {% endif %}
-        {% raw %}
-        var titles_table = $('#unique_titles').DataTable( {
-          "initComplete": function () {
+    });
+{% endraw %}
+{% if notes_column %}
+{% raw %}
+    titlesTable.MakeCellsEditable({
+        "onUpdate": myCallbackFunction,
+        "columns": [2]
+    });
+{% endraw %}
+{% endif %}
+{% raw %}
+    var contentTable = $('#unique_content').DataTable({
+        "initComplete": function() {
             var api = this.api();
-            api.$('td').click( function () {
-              $(all_hosts).DataTable().search( this.innerHTML ).draw();
-              });                      
-            }
-        });
-        {% endraw %}
-        {% if notes_column %}
-        {% raw %}
-        titles_table.MakeCellsEditable({
-          "onUpdate": myCallbackFunction,
-          "columns": [2]
-        });
-        {% endraw %}
-        {% endif %}
-        {% raw %}
-        var content_table = $('#unique_content').DataTable( {
-          "initComplete": function () {
-            var api = this.api();
-            api.$('td').click( function () {
-              $(all_hosts).DataTable().search( this.innerHTML ).draw();
-              });                      
-            }
-        });
-        {% endraw %}
-        {% if notes_column %}
-        {% raw %}
-        content_table.MakeCellsEditable({
-          "onUpdate": myCallbackFunction,
-          "columns": [3]
-        });
-        {% endraw %}
-        {% endif %}
-      {% raw %}
-      });
-      </script>
-      <script>
-      //Adapted from https://www.codexworld.com/export-html-table-data-to-csv-using-javascript/
-      function downloadCSV(csv, filename) {
-      var csvFile;
-      var downloadLink;
-      csvFile = new Blob([csv], {type: "text/csv"});
-      downloadLink = document.createElement("a");
-      downloadLink.download = filename;
-      downloadLink.href = window.URL.createObjectURL(csvFile);
-      downloadLink.style.display = "none";
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      }
-      function exportToCSV(table, filename) {
-        var csv = [];
-        var rows = document.getElementById(table).rows;
-        for (var i = 0; i < rows.length; i++) {
-          var row = [], cols = rows[i].cells;
-          for (var j = 0; j < cols.length; j++) 
+            api.$('td').click(function() {
+                $(all_hosts).DataTable().search(this.innerHTML).draw();
+            });
+        }
+    });
+{% endraw %}
+{% if notes_column %}
+{% raw %}
+    contentTable.MakeCellsEditable({
+        "onUpdate": myCallbackFunction,
+        "columns": [3]
+    });
+{% endraw %}
+{% endif %}
+{% raw %}
+    var fuzzyHashTable = $('#fuzzy_hashes').DataTable({
+        columns: [
+            { title: "URI" },
+            { title: "Title" },
+            { title: "Fuzzy Hash" },
+            { title: "Similarity" },
+{% endraw %}
+{% if notes_column %}
+            { title: "Notes" },
+{% endif %}
+{% raw %}
+        ]
+    });
+{% endraw %}
+{% if notes_column %}
+{% raw %}
+    fuzzyHashTable.MakeCellsEditable({
+        "onUpdate": myCallbackFunction,
+        "columns": [4]
+    });
+{% endraw %}
+{% endif %}
+{% raw %}
+});
+
+//Adapted from https://www.codexworld.com/export-html-table-data-to-csv-using-javascript/
+function downloadCSV(csv, filename) {
+    var csvFile;
+    var downloadLink;
+    csvFile = new Blob([csv], {
+        type: "text/csv"
+    });
+    downloadLink = document.createElement("a");
+    downloadLink.download = filename;
+    downloadLink.href = window.URL.createObjectURL(csvFile);
+    downloadLink.style.display = "none";
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+}
+
+function exportToCSV(table, filename) {
+    var csv = [];
+    var rows = document.getElementById(table).rows;
+    for (var i = 0; i < rows.length; i++) {
+        var row = [],
+            cols = rows[i].cells;
+        for (var j = 0; j < cols.length; j++)
             row.push(cols[j].innerText);
-            csv.push(row.join(","));        
+        csv.push(row.join(","));
+    }
+    downloadCSV(csv.join("\\n"), filename);
+}
+
+function clearSearch(target) {
+    $(target).DataTable().search("").draw();
+}
+{% endraw %}
+{% if fuzzy %}
+{% raw %}
+var fuzzyHashArray = {
+{% endraw %}
+    {% for key, value in results.items() %}
+    "{{ key }}": ["{{ value[0] }}", "{{ value[4] }}"],
+    {% endfor %}
+{% raw %}
+};
+
+function compare(uri, threshold) {
+    var fuzzyHash = fuzzyHashArray[uri][1];
+    var dataSet = [];
+    dataSet.push([`<a href=${uri} target="_blank">${uri}</a>`, fuzzyHashArray[uri][0], fuzzyHashArray[uri][1], "<b>Source hash</b>", " "]);
+    var i;
+    for (i = 0; i < Object.keys(fuzzyHashArray).length; i++) {
+        //Remove the same hash so its not compared against itself
+        if (uri == Object.keys(fuzzyHashArray)[i]) {
+            continue;
+        } else {
+            ratio = ssdeep.similarity(fuzzyHash, Object.values(fuzzyHashArray)[i][1])
         }
-     downloadCSV(csv.join("\\n"), filename);
-     }
-     function clearSearch(target) {
-       $(target).DataTable().search( "" ).draw();
-     }
-     </script>
-    {% endraw %}  
-  </head>
-  <body>
-    <h1 align="center">All Hosts</h1>
-    <button onclick="clearSearch(all_hosts)" style="float: right;">Clear Search</button><br><br>
-    <table id="all_hosts" class="display">
-      <thead>
-        <tr>
-          <th>URI</th>
-          <th>Page title</th>
-          <th>Response Code</th>
-          <th>MD5 Hash</th>
-          {% if redirect_column %}
-          <th>Redirect</th>
-          {% endif %}
-          {% if notes_column %}
-          <th>Notes</th>
-          {% endif %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for key, value in results.items() %}
-        <tr><td><a href={{ key }} target="_blank"</a>{{ key }}</td><td>{{ value[0] }}</td><td>{{ value[1] }}</td><td>{{ value[2] }}</td>{% if redirect_column %}<td>{{ value[3] }}</td>{% endif %}{% if notes_column %}<td>{{ "" }}</td>{% endif %}</tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <button onclick="exportToCSV('all_hosts', 'all_hosts.csv')">Save as CSV File</button>
-    <br><br>
-    <h1 align="center">Hosts by Title</h1>
-    <button onclick="clearSearch(unique_titles)" style="float: right;">Clear Search</button><br><br>
-    <table id="unique_titles" class="display">
-      <thead>
-        <tr>
-          <th>Page Title</th>
-          <th>Count</th>
-          {% if notes_column %}
-          <th>Notes</th>
-          {% endif %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for key, value in title_counts.items() %}
-        <tr><td>{{ key }}</td><td>{{ value }}</td>{% if notes_column %}<td>{{ "" }}</td>{% endif %}</tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <button onclick="exportToCSV('unique_titles', 'unique_titles.csv')">Save as CSV File</button>
-    <br><br>
-    <h1 align="center">Hosts by Content</h1>
-    <button onclick="clearSearch(unique_content)" style="float: right;">Clear Search</button><br><br>
-    <table id="unique_content" class="display">
-      <thead>
-        <tr>
-        <th>MD5 Hash</th>
-        <th>Title</th>
-        <th>Count</th>
-        {% if notes_column %}
-        <th>Notes</th>
-        {% endif %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for key, value in content_counts.items() %}
-        <tr><td>{{ key }}</td><td>{{ value[1] }}</td><td>{{ value[0] }}</td>{% if notes_column %}<td>{{ "" }}</td>{% endif %}</tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <button onclick="exportToCSV('unique_content', 'unique_content.csv')">Save as CSV File</button>
-    <br><br>
-  </body>
+        if (ratio > threshold) {
+            let href = Object.keys(fuzzyHashArray)[i]
+            dataSet.push([`<a href=${href} target="_blank">${href}</a>`, Object.values(fuzzyHashArray)[i][0], Object.values(fuzzyHashArray)[i][1], ratio, " "])
+        }
+    }
+    $('#fuzzy_hashes').DataTable().clear().draw();
+    $('#fuzzy_hashes').DataTable().rows.add(dataSet).draw();
+};
+
+$(document).ready(function() {
+    compare(Object.keys(fuzzyHashArray)[0], 70);
+});
+{% endraw %}
+{% endif %}
+   </script>
+   </head>
+<body>
+      <h1 align="center">All Hosts</h1>
+      <button onclick="clearSearch(all_hosts)" style="float: right;">Clear Search</button><br><br>
+      <table id="all_hosts" class="display">
+         <thead>
+            <tr>
+               <th>URI</th>
+               <th>Page title</th>
+               <th>Response Code</th>
+               <th>MD5 Hash</th>
+{% if redirect_column %}
+               <th>Redirect</th>
+{% endif %}
+{% if notes_column %}
+               <th>Notes</th>
+{% endif %}
+            </tr>
+         </thead>
+         <tbody>
+{% for key, value in results.items() %}
+            <tr><td><a href={{ key }} target="_blank"</a>{{ key }}</td><td>{{ value[0] }}</td><td>{{ value[1] }}</td><td>{{ value[2] }}</td>{% if redirect_column %}<td>{{ value[3] }}</td>{% endif %}{% if notes_column %}<td>{{ "" }}</td>{% endif %}</tr>
+{% endfor %}
+         </tbody>
+      </table>
+      <button onclick="exportToCSV('all_hosts', 'all_hosts.csv')">Save as CSV File</button>
+      <br><br>
+      <h1 align="center">Hosts by Title</h1>
+      <button onclick="clearSearch(unique_titles)" style="float: right;">Clear Search</button><br><br>
+      <table id="unique_titles" class="display">
+         <thead>
+            <tr>
+               <th>Page Title</th>
+               <th>Count</th>
+{% if notes_column %}
+               <th>Notes</th>
+{% endif %}
+            </tr>
+         </thead>
+         <tbody>
+{% for key, value in title_counts.items() %}
+            <tr><td>{{ key }}</td><td>{{ value }}</td>{% if notes_column %}<td>{{ "" }}</td>{% endif %}</tr>
+{% endfor %}
+         </tbody>
+      </table>
+      <button onclick="exportToCSV('unique_titles', 'unique_titles.csv')">Save as CSV File</button>
+      <br><br>
+      <h1 align="center">Hosts by Content</h1>
+      <button onclick="clearSearch(unique_content)" style="float: right;">Clear Search</button><br><br>
+      <table id="unique_content" class="display">
+         <thead>
+            <tr>
+               <th>MD5 Hash</th>
+               <th>Title</th>
+               <th>Count</th>
+{% if notes_column %}
+               <th>Notes</th>
+{% endif %}
+            </tr>
+         </thead>
+         <tbody>
+{% for key, value in content_counts.items() %}
+            <tr><td>{{ key }}</td><td>{{ value[1] }}</td><td>{{ value[0] }}</td>{% if notes_column %}<td>{{ "" }}</td>{% endif %}</tr>
+{% endfor %}
+         </tbody>
+      </table>
+      <button onclick="exportToCSV('unique_content', 'unique_content.csv')">Save as CSV File</button>
+      <br><br>
+{% if fuzzy %}
+      <h1 align="center">Fuzzy Hash Comparisons</h1>
+      <button onclick="clearSearch(fuzzy_hashes)" style="float: right;">Clear Search</button><br><br>
+      <table id="fuzzy_hashes" class="display"></table>
+      <form>
+         URI: <input type="text" id="uri">
+         Threshold:
+         <select id="threshold">
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+            <option value="40">40</option>
+            <option value="50">50</option>
+            <option value="60">60</option>
+            <option value="70" selected>70</option>
+            <option value="80">80</option>
+            <option value="90">90</option>
+         </select>
+         <input type="button" value="Compare Fuzzy Hashes" onclick="compare(document.getElementById('uri').value, document.getElementById('threshold').value);">
+      </form>
+      <button onclick="exportToCSV('fuzzy_hashes', 'fuzzy_hashes.csv')">Save as CSV File</button>
+{% endif %}
+   </body>
 </html>
 """)
 
@@ -247,7 +341,7 @@ def build_list(list_file, ports):
     return scan_set, len(scan_set)
 
 
-def scan(timeout, validate_certs, no_redirect, user_agent, verbose, uri):
+def scan(timeout, validate_certs, no_redirect, user_agent, fuzzy, verbose, uri):
     """Make requests to the provided URIs and save attributes of the responses."""
     headers = {'User-Agent': user_agent}
     parser = etree.HTMLParser()  # Build parser so multiple threads don't use a global parser
@@ -257,20 +351,25 @@ def scan(timeout, validate_certs, no_redirect, user_agent, verbose, uri):
         content = resp.content
         if resp.content:
             resp_hash = hashlib.md5(resp.content).hexdigest()
+            if fuzzy:
+                fuzzy_hash = ssdeep.hash(resp.content)
+            else:
+                fuzzy_hash = '<none>'
             tree = html.fromstring(content, parser=parser)
             try:
-                title = tree.find('.//title').text
+                title = tree.find('.//title').text.lstrip().rstrip()
+                #Need to strip newline characters from the title if it's depicted in HTML with line breaks. This can break javascript arrays built later.
             except AttributeError:
                 title = '<none>'
                 if verbose:
                     print(f'[-] {uri} - attribute error; page may lack title element')
             if no_redirect is False:
-                results[uri] = [title, resp.status_code, resp_hash]
+                results[uri] = [title, resp.status_code, resp_hash] # Will need to add case for no_redirect but also fuzzy hashes
             elif no_redirect is True:
                 if resp.url.strip('/') != uri:
-                    results[uri] = [title, resp.status_code, resp_hash, f'<a href="{resp.url}"</a>{resp.url}']
+                    results[uri] = [title, resp.status_code, resp_hash, f'<a href="{resp.url}"</a>{resp.url}', fuzzy_hash]
                 elif resp.url.strip('/') == uri:
-                    results[uri] = [title, resp.status_code, resp_hash, 'No redirect.']
+                    results[uri] = [title, resp.status_code, resp_hash, 'No redirect.', fuzzy_hash]
         else:
             results[uri] = ['<none>', resp.status_code, '<no page content>', '<no page content>']
     except requests.exceptions.ConnectTimeout:
@@ -333,7 +432,9 @@ def main():
     parser.add_argument('-k', '--validate', dest='validate_certs', required=False, default=False,
                         action='store_true', help='Validate certificates. Default false.')
     parser.add_argument('-n', '--notes', dest='notes', required=False, default=False,
-                        action='store_true')
+                        action='store_true', help='Add a writable "Notes" column to HTML report.')
+    parser.add_argument('-f', '--fuzzy', dest='fuzzy', required=False, default=False,
+                        action='store_true', help='Use "fuzzy" hashes to identify similar sites.')
     parser.add_argument('-v', '--verbose', dest='verbose', required=False, default=False,
                         action='store_true')
     args = parser.parse_args()
@@ -348,15 +449,19 @@ def main():
     no_redirect = args.no_redirect
     validate_certs = args.validate_certs
     notes = args.notes
+    fuzzy = args.fuzzy
     verbose = args.verbose
     start_time = datetime.now()
+    if fuzzy and not ssdeep_module:
+        fuzzy = False
+        print('[-] Error importing ssdeep module. Fuzzy hashing functionality not available.')
     if not output:
         output = f'catscan_report_{start_time.strftime("%a_%d%b%Y_%H%M").lower()}.html'
     if nmap_file:
         scan_list, host_count = parse_nmap_xml(nmap_file, ports)
     elif list_file:
         scan_list, host_count = build_list(list_file, ports)
-    func = partial(scan, timeout, validate_certs, no_redirect, user_agent, verbose)
+    func = partial(scan, timeout, validate_certs, no_redirect, user_agent, fuzzy, verbose)
     pool = ThreadPool(threads)
     pool.map(func, scan_list)
     pool.close()
@@ -386,8 +491,10 @@ def main():
             jquery=jquery,
             datatables=datatables,
             datatables_celledit=datatables_celledit,
+            ssdeep_js=ssdeep_js,
             redirect_column=no_redirect,
             notes_column=notes,
+            fuzzy=fuzzy,
             results=results,
             title_counts=title_counts,
             content_counts=content_counts
