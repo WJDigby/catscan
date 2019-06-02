@@ -3,6 +3,7 @@ This repository includes the following projects:
 * [jQuery](https://jquery.org/) (jquery-3.3.1.min.js) - [MIT License](https://jquery.org/license/)
 * [DataTables](https://datatables.net/) (jquery.dataTables.min.js) - [MIT License](https://datatables.net/license/mit)
 * [CellEdit](https://github.com/ejbeaty/CellEdit) (dataTables.cellEdit.js) - [MIT License](https://github.com/ejbeaty/CellEdit/blob/master/js/dataTables.cellEdit.js)
+* [ssdeep](https://github.com/cloudtracer/ssdeep.js/blob/master/ssdeep.js) (optional) - [MIT License](https://github.com/cloudtracer/ssdeep.js/blob/master/LICENSE)
 
 # Catscan
 
@@ -19,6 +20,7 @@ Additional features include:
 * Multithreaded
 * Take notes on the HTML report
 * Export HTML tables to CSV, including notes
+* Use "fuzzy hashes" [(context triggered piecewise hashes, CTPH)](https://ssdeep-project.github.io/ssdeep/index.html) to identify similar sites
 * Single-click searching between tables
 
 Catscan's utility comes from the HTML report, which uses [DataTables](https://datatables.net/), a [jQuery](https://jquery.com/) plug-in, and [CellEdit](https://github.com/ejbeaty/CellEdit).
@@ -34,9 +36,13 @@ Catscan's utility comes from the HTML report, which uses [DataTables](https://da
 * Sort hosts by title or count
 * Quickly search all hosts table by clicking any element in this table
 
-![All hosts](https://raw.githubusercontent.com/WJDigby/catscan/master/screens/catscan3.png)
+![Hosts by content](https://raw.githubusercontent.com/WJDigby/catscan/master/screens/catscan3.png)
 * Identify unique (or common) responses by hash
 * Quickly search all hosts table by clicking any element in this table
+
+![Fuzzy hash comparison](https://raw.githubusercontent.com/WJDigby/catscan/master/screens/catscan4.png)
+* Identify similar sites based on fuzzy hash values
+* Set threshold for comparison
 
 # Installation
 
@@ -52,9 +58,14 @@ Clone the repository and install the requirements:
 
 `pip3 install -r requirements.txt`
 
-Non-standard libraries included in the current version are jinja2, lxml, requests, and xmltodict.
+Non-standard libraries included in the current version are jinja2, lxml, requests, xmltodict, and ssdeep.
 
-The repository includes the JavaScript files (DataTables, jQuery, and CellEdit) and CSS so that Catscan can be run offline (for example, during an internal penetration test where you lack internet access).
+ssdeep computes fuzzy hashes. This feature is optional in Catscan, so the ssdeep libraries are not required (and therefore not included in requirements.txt). To install ssdeep, follow the instructions on these sites:
+
+*[Installation - python-ssdeep 3.3 documentation](https://python-ssdeep.readthedocs.io/en/latest/installation.html)
+*[ssdeep * PyPI](https://pypi.org/project/ssdeep/)
+
+The repository includes the JavaScript files (DataTables, jQuery, CellEdit, and ssdeep) and CSS so that Catscan can be run offline (for example, during an internal penetration test where you lack internet access).
 
 Make sure I didn't put anything shady in the javascript files:
 
@@ -82,6 +93,12 @@ curl https://raw.githubusercontent.com/ejbeaty/CellEdit/master/js/dataTables.cel
 curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/dataTables.cellEdit.js --silent | md5sum
 4c995255f0e426b527729ce31d360343  -
 
+#ssdeep
+curl https://raw.githubusercontent.com/cloudtracer/ssdeep.js/master/ssdeep.js --silent | md5sum
+ca2b2517d7747f243c31e73c15a45f41  -
+
+curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/ssdeep.js --silent | md5sum
+ca2b2517d7747f243c31e73c15a45f41  -
 
 curl https://cdn.datatables.net/1.10.18/css/jquery.dataTables.min.css --silent | md5sum
 01660835fe229de543497371787d0c8e  -
@@ -98,6 +115,10 @@ Catscan parses text files and adds the protocol (HTTP or HTTPS) and port as nece
 
 For Nmap XML files, Catscan will scan all hosts in the XML that are listening on ports specified on the command line (defaults 80 and 443).
 
+When using the fuzzy hashes feature, the Python ssdeep library calculates hash values, while the JavaScript ssdeep library compares selected hashes within the HTML report. Note that the similarity ratio produced by ssdeep.js seems more generous than the ssdeep C libraries or Python implementation (I opened an issue [here](https://github.com/cloudtracer/ssdeep.js/issues/1)) but it still provides a basis for comparison.
+
+To compare site cotent based on fuzzy hashes, copy and paste or type a URI from the "All hosts" table into the "URI:" bar under the "Fuzzy Hash Comparisons" table, set a threshold with the dropdown, and click "Compare Fuzzy Hashes." This table only appears when you execute Catscan with the -f / --fuzzy option.
+
 # Examples:
 
 Scan a list of hosts from a text file on ports 80 and 443:
@@ -112,6 +133,10 @@ Scan hosts from a text file, name the HTML report "test.html", and add a "Notes"
 
 `python3 catscan -l hosts.txt -o test.html -n`
 
+Scan hosts from an Nmap XML file on default ports, set threads to 20, use verbose output, and add fuzzy hash comparisons:
+
+`python3 catscan -x nmap.xml -t 20 -v -f`
+
 A complete list of arguments is as follows:
 
 ```
@@ -122,6 +147,7 @@ A complete list of arguments is as follows:
 -r / --no-redirect - Do not follow redirects. By default, Catscan follows redirects and indicates in the resulting output whether a redirect was followed.
 -k / --validate - Validate certificates. Generally not recommended, especially for internal environments with lots of self-signed certificates.
 -n / --notes - Add a Notes column to the HTML tables to take notes on the HTML report.
+-f / --fuzzy - Use "fuzzy" hashes to identify similar sites.
 -v / --verbose - More verbose output 
 ```
 
