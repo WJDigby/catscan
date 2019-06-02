@@ -3,7 +3,7 @@ This repository includes the following projects:
 * [jQuery](https://jquery.org/) (jquery-3.3.1.min.js) - [MIT License](https://jquery.org/license/)
 * [DataTables](https://datatables.net/) (jquery.dataTables.min.js) - [MIT License](https://datatables.net/license/mit)
 * [CellEdit](https://github.com/ejbeaty/CellEdit) (dataTables.cellEdit.js) - [MIT License](https://github.com/ejbeaty/CellEdit/blob/master/js/dataTables.cellEdit.js)
-* [ssdeep](https://github.com/cloudtracer/ssdeep.js/blob/master/ssdeep.js) (optional) - [MIT License](https://github.com/cloudtracer/ssdeep.js/blob/master/LICENSE)
+* [ssdeep](https://github.com/cloudtracer/ssdeep.js/blob/master/ssdeep.js) (ssdeep.js) (optional) - [MIT License](https://github.com/cloudtracer/ssdeep.js/blob/master/LICENSE)
 
 # Catscan
 
@@ -63,7 +63,7 @@ Non-standard libraries included in the current version are jinja2, lxml, request
 ssdeep computes fuzzy hashes. This feature is optional in Catscan, so the ssdeep libraries are not required (and therefore not included in requirements.txt). To install ssdeep, follow the instructions on these sites:
 
 *[Installation - python-ssdeep 3.3 documentation](https://python-ssdeep.readthedocs.io/en/latest/installation.html)
-*[ssdeep * PyPI](https://pypi.org/project/ssdeep/)
+*[ssdeep - PyPI](https://pypi.org/project/ssdeep/)
 
 The repository includes the JavaScript files (DataTables, jQuery, CellEdit, and ssdeep) and CSS so that Catscan can be run offline (for example, during an internal penetration test where you lack internet access).
 
