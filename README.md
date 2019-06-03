@@ -62,8 +62,8 @@ Non-standard libraries included in the current version are jinja2, lxml, request
 
 ssdeep computes fuzzy hashes. This feature is optional in Catscan, so the ssdeep libraries are not required (and therefore not included in requirements.txt). To install ssdeep, follow the instructions on these sites:
 
-*[Installation - python-ssdeep 3.3 documentation](https://python-ssdeep.readthedocs.io/en/latest/installation.html)
-*[ssdeep - PyPI](https://pypi.org/project/ssdeep/)
+* [Installation - python-ssdeep 3.3 documentation](https://python-ssdeep.readthedocs.io/en/latest/installation.html)
+* [ssdeep - PyPI](https://pypi.org/project/ssdeep/)
 
 The repository includes the JavaScript files (DataTables, jQuery, CellEdit, and ssdeep) and CSS so that Catscan can be run offline (for example, during an internal penetration test where you lack internet access).
 
