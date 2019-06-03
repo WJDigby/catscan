@@ -93,12 +93,14 @@ curl https://raw.githubusercontent.com/ejbeaty/CellEdit/master/js/dataTables.cel
 curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/dataTables.cellEdit.js --silent | md5sum
 4c995255f0e426b527729ce31d360343  -
 
+
 #ssdeep
 curl https://raw.githubusercontent.com/cloudtracer/ssdeep.js/master/ssdeep.js --silent | md5sum
 ca2b2517d7747f243c31e73c15a45f41  -
 
 curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/ssdeep.js --silent | md5sum
 ca2b2517d7747f243c31e73c15a45f41  -
+
 
 curl https://cdn.datatables.net/1.10.18/css/jquery.dataTables.min.css --silent | md5sum
 01660835fe229de543497371787d0c8e  -
