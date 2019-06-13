@@ -127,7 +127,7 @@ Scan a list of hosts from a text file on ports 80 and 443:
 
 `python3 catscan -l hosts.txt`
 
-Scan hosts from an Nmap XML file on ports 80, 8080, 443, and 8443:
+Scan hosts from an Nmap XML file on ports 80, 8080, 443, and 8443. Note that ports are separated by a space, not a comma:
 
 `python3 catscan -x nmap.xml -p 80 8080 443 8443`
 
