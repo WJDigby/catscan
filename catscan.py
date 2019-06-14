@@ -312,12 +312,14 @@ def build_list(list_file, ports):
     Return a set for scanning"""
     regex = re.compile(r"^(https?:\/\/)?.+?(:[0-9]{0,5})?$")
     scan_set = set()
-    lines = list_file.readlines()
+    lines = [line.rstrip() for line in list_file.readlines()]
     for line in lines:
         line = re.match(regex, line)
-        if line[1] and line[2]: #protocol and port
+        if not line:
+            pass
+        elif line[1] and line[2]: #protocol and port
             scan_set.add(line[0])
-        if line[1] and not line[2]: #protocol no port
+        elif line[1] and not line[2]: #protocol no port
             if line[1] == 'https://':
                 scan_set.add(line[0])
             else:
@@ -325,13 +327,13 @@ def build_list(list_file, ports):
                     if str(port) != '443': #If the list includes a URL with just HTTP, it will not automatically get an HTTPS variant added.
                         uri = line[0] + ':' + str(port)
                         scan_set.add(uri)
-        if not line[1] and line[2]: #no protocol but port
+        elif not line[1] and line[2]: #no protocol but port
             if line[2] == ':443':
                 uri = 'https://' + line[0]
             else:
                 uri = 'http://' + line[0]
             scan_set.add(uri)
-        if not line[1] and not line[2]: #neither protocol nor port
+        elif not line[1] and not line[2]: #neither protocol nor port
             for port in ports:
                 if str(port) == '443':
                     uri = 'https://' + line[0] + ':' + str(port)
