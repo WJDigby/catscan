@@ -7,6 +7,7 @@ from datetime import datetime
 import hashlib
 from functools import partial
 from multiprocessing.dummy import Pool as ThreadPool
+from os import getcwd, path
 import re
 
 import jinja2
@@ -21,11 +22,12 @@ import xmltodict
 
 
 results = {}
-datatables_css = '<link rel="stylesheet" type="text/css" href="./css/jquery.dataTables.min.css">'
-jquery = '<script type="text/javascript" charset="utf8" src="./js/jquery-3.3.1.min.js"></script>'
-datatables = '<script type="text/javascript" charset="utf8" src="./js/jquery.dataTables.min.js"></script>'
-datatables_celledit = '<script type="text/javascript" charset="utf8" src="./js/dataTables.cellEdit.js"></script>'
-ssdeep_js = '<script type="text/javascript" charset="utf8" src="./js/ssdeep.js"></script>'
+cwd = getcwd()
+datatables_css = f'<link rel="stylesheet" type="text/css" href="{cwd}/css/jquery.dataTables.min.css">'
+jquery = f'<script type="text/javascript" charset="utf8" src="{cwd}/js/jquery-3.5.1.min.js"></script>'
+datatables = f'<script type="text/javascript" charset="utf8" src="{cwd}/js/jquery.dataTables.min.js"></script>'
+datatables_celledit = f'<script type="text/javascript" charset="utf8" src="{cwd}/js/dataTables.cellEdit.js"></script>'
+ssdeep_js = f'<script type="text/javascript" charset="utf8" src="{cwd}/js/ssdeep.js"></script>'
 
 jinja_env = jinja2.Environment(trim_blocks=True, lstrip_blocks=True)
 templateLoader = jinja2.FileSystemLoader(searchpath="./")
@@ -64,14 +66,21 @@ def build_list(list_file, ports):
         elif line[1] and line[2]:  # protocol and port
             scan_set.add(line[0])
         elif line[1] and not line[2]:  # protocol no port
+            print('Protocol no port')
             if line[1] == 'https://':
                 scan_set.add(line[0])
             else:
                 for port in ports:
-                    # If the list includes a URL with just HTTP, it will not automatically get an HTTPS variant added.
-                    if str(port) != '443':
+                    # Convert http://example.com:443 to https://example.com:443
+                    if str(port) == '443':
+                        uri = line[0].replace('http://', 'https://') + ':' + str(port)
+                        scan_set.add(uri)
+                    else:
                         uri = line[0] + ':' + str(port)
                         scan_set.add(uri)
+            print(scan_set)
+            exit()
+
         elif not line[1] and line[2]:  # no protocol but port
             if line[2] == ':443':
                 uri = 'https://' + line[0]
@@ -86,6 +95,38 @@ def build_list(list_file, ports):
                     uri = 'http://' + line[0] + ':' + str(port)
                 scan_set.add(uri)
     return scan_set
+
+
+def prompt(question, default=None):
+    # Adapted from https://stackoverflow.com/a/3041990, thanks fmark
+    """Ask a yes/no question via input() and return answer.
+
+    "question" is a string that is presented to the user.
+    "default" is the presumed answer if the user just hits <Enter>.
+        It must be "yes" (the default), "no" or None (meaning
+        an answer is required of the user).
+
+    The "answer" return value is True for "yes" or False for "no".
+    """
+    valid = {"yes": True, "y": True, "ye": True, "no": False, "n": False}
+    if default is None:
+        choice = " [y/n] "
+    elif default == "yes":
+        choice = " [Y/n] "
+    elif default == "no":
+        choice = " [y/N] "
+    else:
+        raise ValueError(f'Invalid default answer: {default}')
+
+    while True:
+        print(question + choice)
+        choice = input().lower()
+        if default is not None and choice == '':
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            print('[*] Please respond with "[y]es" or "[n]o".')
 
 
 def scan(timeout, validate_certs, no_redirect, user_agent, fuzzy, verbose, uri):
@@ -108,59 +149,50 @@ def scan(timeout, validate_certs, no_redirect, user_agent, fuzzy, verbose, uri):
                 title = tree.find('.//title').text.lstrip().rstrip()
                 # Strip newline characters if it's depicted in HTML with line breaks
                 # those break javascript arrays built later.
+                if ',' in title:
+                    title = '"' + title + '"'  # Place title in quotes for CSV export if it contains a comma
             except AttributeError:
                 if verbose:
                     print(f'[-] {uri} - attribute error; page may lack title element')
             login = re.search(regex, content)
             if login:
                 login = True
-            else:
-                login = False
+            # else:
+            #     login = False
             if fuzzy:
                 fuzzy_hash = ssdeep.hash(resp.content)
             elif no_redirect is True:
                 if resp.url.strip('/') != uri:
                     redirect = resp.url
         results[uri] = [title, resp.status_code, login, redirect, md5_hash, fuzzy_hash]
-        #print(uri, results[uri])
     # Handle errors
     except requests.exceptions.ConnectTimeout:
         error = 'Connection timeout.'
-        #if verbose:
-        #    print(f'[-] {uri} - connection timeout')
         results[uri].insert(1, error)
     except requests.exceptions.ReadTimeout:
         error = 'Read timeout.'
-        #if verbose:
-        #    print(f'[-] {uri} - read timeout')
         results[uri].insert(1, error)
     except requests.exceptions.SSLError:
         error = 'Certificate verification failed.'
-        #if verbose:
-        #    print(f'[-] {uri} - certificate verification failed')
         results[uri].insert(1, error)
+    except requests.exceptions.TooManyRedirects:
+        error = 'Too many redirects - probably caught in a redirect loop.'
+        results[uri].insert(1, 'Too many redirects')
     # Since requests uses other libraries (socket, httplib, urllib3) a requests ConnectionError
     # can be any number of errors raised by those libraries.
-    except requests.exceptions.ConnectionError as e:
-        if 'BadStatusLine' in str(e.args[0]):
-            error = str(e.args[0])
-            #if verbose:
-            #    print(f'[-] {uri} - malformed page (consider visiting manually)')
+    except requests.exceptions.ConnectionError as err:
+        err_msg = str(err.args[0])
+        if 'BadStatusLine' in err_msg:
+            error = 'Malformed page - consider visiting manually'
             results[uri].insert(1, 'Malformed page.')
-        elif 'Connection refused' in str(e.args[0]):
-            error = str(e.args[0])
-            #if verbose:
-            #    print(f'[-] {uri} - connection refused')
-            results[uri].insert(1, 'Connection refused.')
-        elif 'Connection reset by peer' in str(e.args[0]):
-            error = str(e.args[0])
-            #if verbose:
-            #    print(f'[-] {uri} - connection reset by peer')
-            results[uri].inser(1, 'Connection reset by peer.')
+        elif 'Connection refused' in err_msg:
+            error = 'Connection refused.'
+            results[uri].insert(1, error)
+        elif 'Connection reset by peer' in err_msg:
+            error = 'Connection reset by peer.'
+            results[uri].inser(1, error)
         else:  # Catch all the others
-            error = str(e.args[0])
-            #if verbose:
-                #print(f'[-] {uri} - unhandled exception: {str(e)}')
+            error = err_msg
             results[uri].insert(1, 'Unhandled exception.')
     if verbose and error:
         print(f'[-] Error scanning {uri}: {error}')
@@ -217,7 +249,13 @@ def main():
     if fuzzy and not ssdeep:
         fuzzy = False
         print('[-] Error importing ssdeep module. Fuzzy hashing functionality not available.')
-    if not output:
+    if output:
+        if path.isfile(output):
+            ans = prompt(f'[*] Output file {output} already exists. Overwrite?', None)
+            if not ans:
+                print('[-] Provide new name or overwrite existing report. Exiting.')
+                exit()
+    else:
         output = f'catscan_report_{start_time.strftime("%a_%d%b%Y_%H%M").lower()}.html'
     if nmap_file:
         scan_list = parse_nmap_xml(nmap_file, ports)
@@ -237,12 +275,11 @@ def main():
 
     title_counts, content_counts = {}, {}
     for value in results.values():
-        #print(value)
         if value[0] in title_counts:
             title_counts[value[0]] += 1
         else:
             title_counts[value[0]] = 1
-        if value[3] in content_counts:
+        if value[4] in content_counts:
             content_counts[value[4]][0] += 1
         else:
             content_counts[value[4]] = [1, value[0]]
@@ -271,3 +308,5 @@ if __name__ == '__main__':
     # Adding certificate verification is strongly advised." warning.
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     main()
+
+
