@@ -73,18 +73,25 @@ Make sure I didn't put anything shady in the javascript files:
 ```
 #jQuery
 curl https://code.jquery.com/jquery-3.5.1.min.js --silent | md5sum 
-
+dc5e7f18c8d36ac1d3d4753a87c98d0a  -
 
 curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/jquery-3.5.1.min.js --silent | md5sum
+dc5e7f18c8d36ac1d3d4753a87c98d0a  -
 
+
+curl cdn.datatables.net/1.10.20/css/jquery.dataTables.min.css --silent | md5sum
+01660835fe229de543497371787d0c8e  -
+
+curl https://raw.githubusercontent.com/WJDigby/catscan/master/css/jquery.dataTables.min.css --silent | md5sum
+01660835fe229de543497371787d0c8e  -
 
 
 #dataTables
 curl cdn.datatables.net/1.10.20/js/jquery.dataTables.min.js --silent | md5sum 
-
+64cd39014cddcb7305b2422bd1356db8  -
 
 curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/jquery.dataTables.min.js --silent | md5sum
-
+64cd39014cddcb7305b2422bd1356db8  -
 
 
 #cellEdit
@@ -101,13 +108,6 @@ ca2b2517d7747f243c31e73c15a45f41  -
 
 curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/ssdeep.js --silent | md5sum
 ca2b2517d7747f243c31e73c15a45f41  -
-
-
-curl cdn.datatables.net/1.10.20/css/jquery.dataTables.min.css --silent | md5sum
-
-
-curl https://raw.githubusercontent.com/WJDigby/catscan/master/css/jquery.dataTables.min.css --silent | md5sum
-
 ```
 
 # Use
