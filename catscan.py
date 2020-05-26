@@ -248,14 +248,14 @@ def main():
     if fuzzy and not ssdeep:
         fuzzy = False
         print('[-] Error importing ssdeep module. Fuzzy hashing functionality not available.')
+    if not output:
+        output = f'catscan_report_{start_time.strftime("%a_%d%b%Y_%H%M").lower()}.html'
     if output:
         if path.isfile(output):
             ans = prompt(f'[*] Output file {output} already exists. Overwrite?', None)
             if not ans:
                 print('[-] Provide new name or overwrite existing report. Exiting.')
                 exit()
-    else:
-        output = f'catscan_report_{start_time.strftime("%a_%d%b%Y_%H%M").lower()}.html'
     if nmap_file:
         scan_list = parse_nmap_xml(nmap_file, ports)
     elif list_file:
