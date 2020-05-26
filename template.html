@@ -1,0 +1,266 @@
+<html>
+   <head>
+      <title>Catscan Report for {{ start_time }}</title>
+      {{ datatables_css }}
+{% raw %}
+      <style type="text/css" class="init">
+         body {font-family:Arial;}
+      </style>
+{% endraw %}
+      {{ jquery }}
+      {{ datatables }}
+{% if notes_column %}
+      {{ datatables_celledit }}
+{% endif %}
+{% if fuzzy %}
+      {{ ssdeep_js }}
+{% endif %}
+{% raw %}
+   <script type="text/javascript" class="init">
+$(document).ready(function() {
+    var hostsTable = $('#all_hosts').DataTable({
+        "pageLength": 10
+    });
+{% endraw %}
+{% if notes_column %}
+{% raw %}
+    function myCallbackFunction(updatedCell, updatedRow, oldValue) {}
+    hostsTable.MakeCellsEditable({
+        "onUpdate": myCallbackFunction,
+        "columns": [6]
+    });
+{% endraw %}
+{% endif %}
+{% raw %}
+    var titlesTable = $('#unique_titles').DataTable({
+        "initComplete": function() {
+            var api = this.api();
+            api.$('td').click(function() {
+                $(all_hosts).DataTable().search(this.innerHTML).draw();
+            });
+        }
+    });
+{% endraw %}
+{% if notes_column %}
+{% raw %}
+    titlesTable.MakeCellsEditable({
+        "onUpdate": myCallbackFunction,
+        "columns": [2]
+    });
+{% endraw %}
+{% endif %}
+{% raw %}
+    var contentTable = $('#unique_content').DataTable({
+        "initComplete": function() {
+            var api = this.api();
+            api.$('td').click(function() {
+                $(all_hosts).DataTable().search(this.innerHTML).draw();
+            });
+        }
+    });
+{% endraw %}
+{% if notes_column %}
+{% raw %}
+    contentTable.MakeCellsEditable({
+        "onUpdate": myCallbackFunction,
+        "columns": [3]
+    });
+{% endraw %}
+{% endif %}
+{% raw %}
+    var fuzzyHashTable = $('#fuzzy_hashes').DataTable({
+        columns: [
+            { title: "URI" },
+            { title: "Title" },
+            { title: "Fuzzy Hash" },
+            { title: "Similarity" },
+{% endraw %}
+{% if notes_column %}
+            { title: "Notes" },
+{% endif %}
+{% raw %}
+        ]
+    });
+{% endraw %}
+{% if notes_column %}
+{% raw %}
+    fuzzyHashTable.MakeCellsEditable({
+        "onUpdate": myCallbackFunction,
+        "columns": [4]
+    });
+{% endraw %}
+{% endif %}
+{% raw %}
+});
+
+//Adapted from https://www.codexworld.com/export-html-table-data-to-csv-using-javascript/
+function downloadCSV(csv, filename) {
+    var csvFile;
+    var downloadLink;
+    csvFile = new Blob([csv], {
+        type: "text/csv"
+    });
+    downloadLink = document.createElement("a");
+    downloadLink.download = filename;
+    downloadLink.href = window.URL.createObjectURL(csvFile);
+    downloadLink.style.display = "none";
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+}
+
+function exportToCSV(table, filename) {
+    var csv = [];
+    var rows = document.getElementById(table).rows;
+    for (var i = 0; i < rows.length; i++) {
+        var row = [],
+            cols = rows[i].cells;
+        for (var j = 0; j < cols.length; j++)
+            row.push(cols[j].innerText);
+        csv.push(row.join(","));
+    }
+    downloadCSV(csv.join("\n"), filename);
+}
+
+function clearSearch(target) {
+    $(target).DataTable().search("").draw();
+}
+{% endraw %}
+{% if fuzzy %}
+{% raw %}
+var fuzzyHashArray = {
+{% endraw %}
+    {% for key, value in results.items() %}
+    "{{ key }}": ["{{ value[0] | replace('"', '') }}", "{{ value[5] }}"],
+    {% endfor %}
+{% raw %}
+};
+
+function compare(uri, threshold) {
+    var fuzzyHash = fuzzyHashArray[uri][1];
+    var dataSet = [];
+    dataSet.push([`<a href=${uri} target="_blank">${uri}</a>`, fuzzyHashArray[uri][0], fuzzyHashArray[uri][1], "<b>Source hash</b>", " "]);
+    var i;
+    for (i = 0; i < Object.keys(fuzzyHashArray).length; i++) {
+        //Remove the same hash so its not compared against itself
+        if (uri == Object.keys(fuzzyHashArray)[i]) {
+            continue;
+        } else {
+            ratio = ssdeep.similarity(fuzzyHash, Object.values(fuzzyHashArray)[i][1])
+        }
+        if (ratio > threshold) {
+            let href = Object.keys(fuzzyHashArray)[i]
+            dataSet.push([`<a href=${href} target="_blank">${href}</a>`, Object.values(fuzzyHashArray)[i][0], Object.values(fuzzyHashArray)[i][1], ratio, " "])
+        }
+    }
+    $('#fuzzy_hashes').DataTable().clear().draw();
+    $('#fuzzy_hashes').DataTable().rows.add(dataSet).draw();
+};
+
+$(document).ready(function() {
+    compare(Object.keys(fuzzyHashArray)[0], 70);
+});
+{% endraw %}
+{% endif %}
+   </script>
+   </head>
+<body>
+      <h1 align="center">All Hosts</h1>
+      <button onclick="clearSearch(all_hosts)" style="float: right;">Clear Search</button><br><br>
+      <table id="all_hosts" class="display">
+         <thead>
+            <tr>
+               <th>URI</th>
+               <th>Page title</th>
+               <th>Response Code</th>
+               <th>Login</th>
+               {% if redirect_column %}<th>Redirect</th>{% endif %}
+               <th>MD5 Hash</th>
+               {% if notes_column %}<th>Notes</th>{% endif %}
+            </tr>
+         </thead>
+         <tbody>
+{% for k, v in results.items() %}
+            <tr>
+                <td><a href={{ k }} target="_blank">{{ k }}</a></td>
+                <td>{{ v[0] | replace(None, "") }}</td>
+                <td>{{ v[1] | replace(None, "") }}</td>
+                <td>{{ v[2] | replace(True, "Yes") | replace(None, "No") | replace(None, "") }}</td>
+                {% if redirect_column %}<td>{% if v[3] %}<a href={{ v[3] }} target="_blank">{{ v[3] }}</a>{% else %}{% endif %}</td>{% endif %}
+                <td>{{ v[4] | replace(None, "")}}</td>
+                {% if notes_column %}<td>{{ "" }}</td>{% endif %}
+            </tr>
+{% endfor %}
+         </tbody>
+      </table>
+      <button onclick="exportToCSV('all_hosts', 'all_hosts.csv')">Save as CSV File</button>
+      <br><br>
+      <h1 align="center">Hosts by Title</h1>
+      <button onclick="clearSearch(unique_titles)" style="float: right;">Clear Search</button><br><br>
+      <table id="unique_titles" class="display">
+         <thead>
+            <tr>
+               <th>Page Title</th>
+               <th>Count</th>
+               {% if notes_column %}<th>Notes</th>{% endif %}
+            </tr>
+         </thead>
+         <tbody>
+{% for key, value in title_counts.items() %}
+            <tr>
+                <td>{{ key }}</td>
+                <td>{{ value }}</td>
+                {% if notes_column %}<td>{{ "" }}</td>{% endif %}
+            </tr>
+{% endfor %}
+         </tbody>
+      </table>
+      <button onclick="exportToCSV('unique_titles', 'unique_titles.csv')">Save as CSV File</button>
+      <br><br>
+      <h1 align="center">Hosts by Content</h1>
+      <button onclick="clearSearch(unique_content)" style="float: right;">Clear Search</button><br><br>
+      <table id="unique_content" class="display">
+         <thead>
+            <tr>
+               <th>MD5 Hash</th>
+               <th>Title</th>
+               <th>Count</th>
+               {% if notes_column %}<th>Notes</th>{% endif %}
+            </tr>
+         </thead>
+         <tbody>
+{% for key, value in content_counts.items() %}
+            <tr>
+                <td>{{ key }}</td>
+                <td>{{ value[1] }}</td>
+                <td>{{ value[0] }}</td>
+                {% if notes_column %}<td>{{ "" }}</td>{% endif %}
+            </tr>
+{% endfor %}
+         </tbody>
+      </table>
+      <button onclick="exportToCSV('unique_content', 'unique_content.csv')">Save as CSV File</button>
+      <br><br>
+{% if fuzzy %}
+      <h1 align="center">Fuzzy Hash Comparisons</h1>
+      <button onclick="clearSearch(fuzzy_hashes)" style="float: right;">Clear Search</button><br><br>
+      <table id="fuzzy_hashes" class="display"></table>
+      <form>
+         URI: <input type="text" id="uri">
+         Threshold:
+         <select id="threshold">
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+            <option value="40">40</option>
+            <option value="50">50</option>
+            <option value="60">60</option>
+            <option value="70" selected>70</option>
+            <option value="80">80</option>
+            <option value="90">90</option>
+         </select>
+         <input type="button" value="Compare Fuzzy Hashes" onclick="compare(document.getElementById('uri').value, document.getElementById('threshold').value);">
+      </form>
+      <button onclick="exportToCSV('fuzzy_hashes', 'fuzzy_hashes.csv')">Save as CSV File</button>
+{% endif %}
+   </body>
+</html>
