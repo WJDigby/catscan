@@ -1,23 +1,24 @@
 This repository includes the following projects:
 
-* [jQuery](https://jquery.org/) (jquery-3.3.1.min.js) - [MIT License](https://jquery.org/license/)
+* [jQuery](https://jquery.org/) (jquery-3.5.1.min.js) - [MIT License](https://jquery.org/license/)
 * [DataTables](https://datatables.net/) (jquery.dataTables.min.js) - [MIT License](https://datatables.net/license/mit)
 * [CellEdit](https://github.com/ejbeaty/CellEdit) (dataTables.cellEdit.js) - [MIT License](https://github.com/ejbeaty/CellEdit/blob/master/js/dataTables.cellEdit.js)
 * [ssdeep](https://github.com/cloudtracer/ssdeep.js/blob/master/ssdeep.js) (ssdeep.js) (optional) - [MIT License](https://github.com/cloudtracer/ssdeep.js/blob/master/LICENSE)
 
 # Catscan
 
-Use Catscan for rapid triage of web applications across large environments. Catscan can help you quickly identify unique or uncommon applications (by MD5 hash) or targets of interest (by HTML title). Catscan is designed to fit into your existing workflow and help optimize targeting. It is not intended to replace tools like [EyeWitness](https://github.com/FortyNorthSecurity/EyeWitness) or [gowitness](https://github.com/sensepost/gowitness), but can save you from scrolling through hundreds of IIS7 server splash pages.
+Use Catscan for rapid triage of web applications across large environments. Catscan can help you quickly identify unique or uncommon applications (by MD5 hash) or targets of interest (by HTML title or the presence of a login form). Catscan is designed to fit into your existing workflow and help optimize targeting. It is not intended to replace tools like [EyeWitness](https://github.com/FortyNorthSecurity/EyeWitness) or [gowitness](https://github.com/sensepost/gowitness), but can save you from scrolling through hundreds of IIS7 server splash pages.
 
 Catscan takes as input a list of hostnames / IP addresses or an Nmap .xml file. It produces a searchable, sortable HTML file with three tables:
 
-* All hosts by URI (including title, response code, response hash, and redirect)
+* All hosts by URI (including title, response code, login, response hash, and redirect)
 * Hosts grouped by title (including count)
 * Hosts grouped by content (including title and count)
 
 Additional features include:
 
 * Multithreaded
+* Scan for login forms
 * Take notes on the HTML report
 * Export HTML tables to CSV, including notes
 * Use "fuzzy hashes" [(context triggered piecewise hashes, CTPH)](https://ssdeep-project.github.io/ssdeep/index.html) to identify similar sites
@@ -71,19 +72,19 @@ Make sure I didn't put anything shady in the javascript files:
 
 ```
 #jQuery
-curl https://code.jquery.com/jquery-3.3.1.min.js --silent | md5sum 
-a09e13ee94d51c524b7e2a728c7d4039  -
+curl https://code.jquery.com/jquery-3.5.1.min.js --silent | md5sum 
 
-curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/jquery-3.3.1.min.js --silent | md5sum
-a09e13ee94d51c524b7e2a728c7d4039  -
+
+curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/jquery-3.5.1.min.js --silent | md5sum
+
 
 
 #dataTables
-curl https://cdn.datatables.net/1.10.18/js/jquery.dataTables.min.js --silent | md5sum 
-4d2910ca45f9cea3f35e87065a1be139  -
+curl cdn.datatables.net/1.10.20/js/jquery.dataTables.min.js --silent | md5sum 
+
 
 curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/jquery.dataTables.min.js --silent | md5sum
-4d2910ca45f9cea3f35e87065a1be139  -
+
 
 
 #cellEdit
@@ -102,11 +103,11 @@ curl https://raw.githubusercontent.com/WJDigby/catscan/master/js/ssdeep.js --sil
 ca2b2517d7747f243c31e73c15a45f41  -
 
 
-curl https://cdn.datatables.net/1.10.18/css/jquery.dataTables.min.css --silent | md5sum
-01660835fe229de543497371787d0c8e  -
+curl cdn.datatables.net/1.10.20/css/jquery.dataTables.min.css --silent | md5sum
+
 
 curl https://raw.githubusercontent.com/WJDigby/catscan/master/css/jquery.dataTables.min.css --silent | md5sum
-01660835fe229de543497371787d0c8e  -
+
 ```
 
 # Use
