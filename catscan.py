@@ -98,7 +98,7 @@ def build_list(list_file, ports):
 
 
 def prompt(question, default=None):
-    # Adapted from https://stackoverflow.com/a/3041990, thanks fmark
+    # Adapted from https://stackoverflow.com/a/3041990 - thanks fmark
     """Ask a yes/no question via input() and return answer.
 
     "question" is a string that is presented to the user.
@@ -150,15 +150,13 @@ def scan(timeout, validate_certs, no_redirect, user_agent, fuzzy, verbose, uri):
                 # Strip newline characters if it's depicted in HTML with line breaks
                 # those break javascript arrays built later.
                 if ',' in title:
-                    title = '"' + title + '"'  # Place title in quotes for CSV export if it contains a comma
+                    title = '"' + title + '"'  # If title contains comma, wrap in quotes for CSV export
             except AttributeError:
                 if verbose:
                     print(f'[-] {uri} - attribute error; page may lack title element')
             login = re.search(regex, content)
             if login:
                 login = True
-            # else:
-            #     login = False
             if fuzzy:
                 fuzzy_hash = ssdeep.hash(resp.content)
             elif no_redirect is True:
@@ -202,7 +200,8 @@ def main():
     """Scan a list of hosts and generate an HTML report. Return nothing."""
     user_agent = '''Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.163 Safari/537.36'''
 
-    parser = argparse.ArgumentParser(description='Scan and categorize web servers using a searchable / sortable HTML report.',
+    parser = argparse.ArgumentParser(description='Scan and categorize web servers using a searchable and sortable'
+                                                 'HTML report.',
                                      epilog='list input: python3 catscan.py -l <ips.txt> -p 80 443 8080 -t 10\n'
                                             'Nmap xml:   python3 catscan.py -x <nmap.xml>',
                                      formatter_class=RawDescriptionHelpFormatter)
@@ -308,5 +307,3 @@ if __name__ == '__main__':
     # Adding certificate verification is strongly advised." warning.
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     main()
-
-
