@@ -188,7 +188,7 @@ def scan(timeout, validate_certs, no_redirect, user_agent, fuzzy, verbose, uri):
             results[uri].insert(1, error)
         elif 'Connection reset by peer' in err_msg:
             error = 'Connection reset by peer.'
-            results[uri].inser(1, error)
+            results[uri].insert(1, error)
         else:  # Catch all the others
             error = err_msg
             results[uri].insert(1, 'Unhandled exception.')
