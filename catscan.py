@@ -141,10 +141,9 @@ def scan(timeout, validate_certs, no_redirect, user_agent, fuzzy, verbose, uri):
     try:
         resp = requests.get(uri, headers=headers, timeout=timeout, verify=validate_certs,
                             allow_redirects=no_redirect)
-        content = resp.content.decode('utf-8')
         if resp.content:
             md5_hash = hashlib.md5(resp.content).hexdigest()
-            tree = html.fromstring(content, parser=parser)
+            tree = html.fromstring(resp.content, parser=parser)
             try:
                 title = tree.find('.//title').text.lstrip().rstrip()
                 # Strip newline characters if it's depicted in HTML with line breaks
@@ -154,7 +153,7 @@ def scan(timeout, validate_certs, no_redirect, user_agent, fuzzy, verbose, uri):
             except AttributeError:
                 if verbose:
                     print(f'[-] {uri} - attribute error; page may lack title element')
-            login = re.search(regex, content)
+            login = re.search(regex, resp.content.decode('utf-8'))
             if login:
                 login = True
             if fuzzy:
