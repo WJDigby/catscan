@@ -7,7 +7,12 @@ This repository includes the following projects:
 
 # Catscan
 
-Use Catscan for rapid triage of web applications across large environments. Catscan can help you quickly identify unique or uncommon applications (by MD5 hash) or targets of interest (by HTML title or the presence of a login form). Catscan is designed to fit into your existing workflow and help optimize targeting. It is not intended to replace tools like [EyeWitness](https://github.com/FortyNorthSecurity/EyeWitness) or [gowitness](https://github.com/sensepost/gowitness), but can save you from scrolling through hundreds of IIS7 server splash pages.
+Use Catscan for rapid triage of web applications across large environments. Catscan can help you quickly identify:
+* unique or uncommon applications (by MD5 hash)
+* targets of interest (by HTML title or the presence of a login form)
+* applications with related or similar content (by "fuzzy" hash)
+
+Catscan is designed to fit into your existing workflow and help optimize targeting. It is not intended to replace tools like [EyeWitness](https://github.com/FortyNorthSecurity/EyeWitness) or [gowitness](https://github.com/sensepost/gowitness), but can save you from scrolling through hundreds of IIS7 server splash pages.
 
 Catscan takes as input a list of hostnames / IP addresses or an Nmap .xml file. It produces a searchable, sortable HTML file with three tables:
 
@@ -18,6 +23,8 @@ Catscan takes as input a list of hostnames / IP addresses or an Nmap .xml file. 
 Additional features include:
 
 * Multithreaded
+* Resume scanning where you left off in case of errors
+* Built in proxy support
 * Scan for login forms
 * Take notes on the HTML report
 * Export HTML tables to CSV, including notes
@@ -59,7 +66,7 @@ Clone the repository and install the requirements:
 
 `pip3 install -r requirements.txt`
 
-Non-standard libraries included in the current version are jinja2, lxml, requests, xmltodict, and ssdeep.
+Non-standard libraries included in the current version are click, jinja2, lxml, requests, tqdm, and ssdeep.
 
 ssdeep computes fuzzy hashes. This feature is optional in Catscan, so the ssdeep libraries are not required (and therefore not included in requirements.txt). To install ssdeep, follow the instructions on these sites:
 
@@ -114,9 +121,9 @@ ca2b2517d7747f243c31e73c15a45f41  -
 
 Catscan's only required input is a source file. The file can be either a text file of hostnames or IPs, separated by line, or an Nmap XML file.
 
-Catscan parses text files and adds the protocol (HTTP or HTTPS) and port as necessary. Default ports are 80 and 443. If an entry on the list includes a specfic port, Catscan accepts that entry as is and does *not* add ports specified on the command line. 
+Catscan parses text files and adds the protocol (HTTP or HTTPS) and port as necessary. Default ports are 80 and 443. If an entry on the list includes a specfic port, Catscan assumes that reflects the operator's intent and does *not* add ports specified on the command line. 
 
-For Nmap XML files, Catscan will scan all hosts in the XML that are listening on ports specified on the command line (defaults 80 and 443).
+For Nmap XML files, Catscan will scan all hosts in the XML that are listening (open) on ports specified on the command line (defaults 80 and 443).
 
 When using the fuzzy hashes feature, the Python ssdeep library calculates hash values, while the JavaScript ssdeep library compares selected hashes within the HTML report. Note that the similarity ratio produced by ssdeep.js seems more generous than the ssdeep C libraries or Python implementation (I opened an issue [here](https://github.com/cloudtracer/ssdeep.js/issues/1)) but it still provides a basis for comparison.
 
@@ -126,32 +133,37 @@ To compare site cotent based on fuzzy hashes, copy and paste or type a URI from 
 
 Scan a list of hosts from a text file on ports 80 and 443:
 
-`python3 catscan -l hosts.txt`
+`python3 catscan hosts.txt`
 
 Scan hosts from an Nmap XML file on ports 80, 8080, 443, and 8443. Note that ports are separated by a space, not a comma:
 
-`python3 catscan -x nmap.xml -p 80 8080 443 8443`
+`python3 catscan nmap.xml -p 80,8080,443,8443`
 
 Scan hosts from a text file, name the HTML report "test.html", and add a "Notes" column on the HTML report:
 
-`python3 catscan -l hosts.txt -o test.html -n`
+`python3 catscan hosts.txt -o test -n`
 
 Scan hosts from an Nmap XML file on default ports, set threads to 20, use verbose output, and add fuzzy hash comparisons:
 
-`python3 catscan -x nmap.xml -t 20 -v -f`
+`python3 catscan nmap.xml -t 20 -v -f`
 
 A complete list of arguments is as follows:
 
 ```
--t / --threads - Number of threads to use, default 10
--T / --timeout - Timeout in seconds. Default is 5; reduce this on internal networks for faster results.
--o / --output - Set the name for the html output. By default, reports are named "catscan_report_day_ddmmmyyyy_hhmm.html"
--u / --user-agent - Set a user agent. The default is "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.85 Safari/537.36"
--r / --no-redirect - Do not follow redirects. By default, Catscan follows redirects and indicates in the resulting output whether a redirect was followed.
--k / --validate - Validate certificates. Generally not recommended, especially for internal environments with lots of self-signed certificates.
--n / --notes - Add a Notes column to the HTML tables to take notes on the HTML report.
--f / --fuzzy - Use "fuzzy" hashes to identify similar sites.
--v / --verbose - More verbose output 
+  -f, --fuzzy            Generate "fuzzy" hashes to help identify similar sites.
+  -r, --no-redirect      Do not follow redirects. Catscan follows redirects by default.
+  -n, --notes            Add a writable "notes" column to the HTML report.
+  -o, --outfile TEXT     Name of output file and HTML report. Default based on date/time.
+  -p, --ports TEXT       List of ports to scan. Default 80 and 443.
+  -P, --proxy TEXT       Use an HTTP(S) or SOCKS (4/4a/5) proxy in format <protocol>://<ip>:<port>
+  -R, --report-only      Do not scan, just build the report. Requires -o / --outfile.
+  -i, --scan-by-ip       Build scan lists by IP only (not hostname). Only relevant with Nmap XML files.
+  -t, --threads INTEGER  Number of threads. Default 10.
+  -T, --timeout INTEGER  Timeout in seconds. Default 5.
+  -u, --user-agent TEXT  User-Agent string. Defaults to Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.67 Safari/537.36.
+  -k, --validate-certs   Validate TLS certificates. Default False.
+  -v, --verbose          Produce more verbose output.
+  -h, --help             Show this message and exit.
 ```
 
 Use of the HTML report should be intuitive. Datatables allows each table to be sorted by any row or searched by any field. Clicking any table element in the second (Hosts by Title) or third (Hosts by Content) tables populates the search bar for the first table. So, if you want a list of all hosts with a specific hash, use the third table to identify that hash, then click the hash to search for it in the first table. 

@@ -1,6 +1,6 @@
 <html>
    <head>
-      <title>Catscan Report for {{ start_time }}</title>
+      <title>Catscan Report for {{ hosts[0].scan_time }}</title>
       {{ datatables_css }}
 {% raw %}
       <style type="text/css" class="init">
@@ -15,13 +15,12 @@
 {% if fuzzy %}
       {{ ssdeep_js }}
 {% endif %}
-{% raw %}
    <script type="text/javascript" class="init">
 $(document).ready(function() {
     var hostsTable = $('#all_hosts').DataTable({
-        "pageLength": 10
+        "pageLength": 10,
+        "language": {"lengthMenu": "Show _MENU_ of {{ hosts|length }} total entries"}
     });
-{% endraw %}
 {% if notes_column %}
 {% raw %}
     function myCallbackFunction(updatedCell, updatedRow, oldValue) {}
@@ -31,8 +30,8 @@ $(document).ready(function() {
     });
 {% endraw %}
 {% endif %}
-{% raw %}
     var titlesTable = $('#unique_titles').DataTable({
+        "language": {"lengthMenu": "Show _MENU_ of {{ title_counts|length }} total entries"},
         "initComplete": function() {
             var api = this.api();
             api.$('td').click(function() {
@@ -40,7 +39,6 @@ $(document).ready(function() {
             });
         }
     });
-{% endraw %}
 {% if notes_column %}
 {% raw %}
     titlesTable.MakeCellsEditable({
@@ -49,8 +47,9 @@ $(document).ready(function() {
     });
 {% endraw %}
 {% endif %}
-{% raw %}
+
     var contentTable = $('#unique_content').DataTable({
+        "language": {"lengthMenu": "Show _MENU_ of {{ content_counts|length }} total entries"},
         "initComplete": function() {
             var api = this.api();
             api.$('td').click(function() {
@@ -58,7 +57,7 @@ $(document).ready(function() {
             });
         }
     });
-{% endraw %}
+
 {% if notes_column %}
 {% raw %}
     contentTable.MakeCellsEditable({
@@ -129,8 +128,8 @@ function clearSearch(target) {
 {% raw %}
 var fuzzyHashArray = {
 {% endraw %}
-    {% for key, value in results.items() %}
-    "{{ key }}": ["{{ value[0] | replace('"', '') }}", "{{ value[5] }}"],
+    {% for host in hosts %}
+    "{{ host.uri }}": ["{{ host.title | replace('"', '') }}", "{{ host.fuzzy_hash }}"],
     {% endfor %}
 {% raw %}
 };
@@ -141,7 +140,7 @@ function compare(uri, threshold) {
     dataSet.push([`<a href=${uri} target="_blank">${uri}</a>`, fuzzyHashArray[uri][0], fuzzyHashArray[uri][1], "<b>Source hash</b>", " "]);
     var i;
     for (i = 0; i < Object.keys(fuzzyHashArray).length; i++) {
-        //Remove the same hash so its not compared against itself
+        //Remove the same hash so it's not compared against itself
         if (uri == Object.keys(fuzzyHashArray)[i]) {
             continue;
         } else {
@@ -179,14 +178,14 @@ $(document).ready(function() {
             </tr>
          </thead>
          <tbody>
-{% for k, v in results.items() %}
+{% for host in hosts %}
             <tr>
-                <td><a href={{ k }} target="_blank">{{ k }}</a></td>
-                <td>{{ v[0] | replace(None, "") }}</td>
-                <td>{{ v[1] | replace(None, "") }}</td>
-                <td>{{ v[2] | replace(True, "Yes") | replace(None, "No") | replace(None, "") }}</td>
-                {% if redirect_column %}<td>{% if v[3] %}<a href={{ v[3] }} target="_blank">{{ v[3] }}</a>{% else %}{% endif %}</td>{% endif %}
-                <td>{{ v[4] | replace(None, "")}}</td>
+                <td><a href={{ host.uri }} target="_blank">{{ host.uri }}</a></td>
+                <td>{{ host.title | replace(None, "") }}</td>
+                <td>{{ host.status_code | replace(None, "") }}</td>
+                <td>{{ host.login | replace(True, "Yes") | replace(None, "No") | replace(None, "") }}</td>
+                {% if redirect_column %}<td>{% if host.redirect %}<a href={{ host.redirect }} target="_blank">{{ host.redirect }}</a>{% else %}{% endif %}</td>{% endif %}
+                <td>{{ host.md5_hash | replace(None, "")}}</td>
                 {% if notes_column %}<td>{{ "" }}</td>{% endif %}
             </tr>
 {% endfor %}
@@ -205,10 +204,10 @@ $(document).ready(function() {
             </tr>
          </thead>
          <tbody>
-{% for key, value in title_counts.items() %}
+{% for title, count in title_counts.items() %}
             <tr>
-                <td>{{ key }}</td>
-                <td>{{ value }}</td>
+                <td>{{ title }}</td>
+                <td>{{ count }}</td>
                 {% if notes_column %}<td>{{ "" }}</td>{% endif %}
             </tr>
 {% endfor %}
@@ -228,11 +227,11 @@ $(document).ready(function() {
             </tr>
          </thead>
          <tbody>
-{% for key, value in content_counts.items() %}
+{% for md5_hash, count_and_title in content_counts.items() %}
             <tr>
-                <td>{{ key }}</td>
-                <td>{{ value[1] }}</td>
-                <td>{{ value[0] }}</td>
+                <td>{{ md5_hash }}</td>
+                <td>{{ count_and_title[1] }}</td>
+                <td>{{ count_and_title[0] }}</td>
                 {% if notes_column %}<td>{{ "" }}</td>{% endif %}
             </tr>
 {% endfor %}
